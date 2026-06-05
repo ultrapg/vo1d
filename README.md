@@ -1,6 +1,6 @@
-# VO1D
+# vo1d
 
-**Local-first autonomous AI execution agent.** VO1D runs local LLMs (llama.cpp) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, and more. All inference runs entirely offline on your hardware.
+**Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, and more. All inference runs entirely offline on your hardware.
 
 ## Features
 
@@ -97,7 +97,7 @@ max_tokens = 2048
 
 ## Models
 
-VO1D automatically downloads models from Hugging Face via direct links. Compatible models are shown via `vo1d models profile`.
+vo1d automatically downloads models from Hugging Face via direct links. Compatible models are shown via `vo1d models profile`.
 
 ## Architecture
 
