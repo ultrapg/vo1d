@@ -59,6 +59,8 @@ impl PolicyEngine {
             Action::ListDirectory { .. } => PolicyResult::Allow,
             Action::FileMetadata { .. } => PolicyResult::Allow,
             Action::SearchFiles { .. } => PolicyResult::Allow,
+            Action::WebSearch { .. } => PolicyResult::Allow,
+            Action::WebFetch { .. } => PolicyResult::Allow,
             Action::Finish { .. } => PolicyResult::Allow,
             _ => PolicyResult::Block,
         }
@@ -107,6 +109,8 @@ impl PolicyEngine {
             }
             Action::Finish { .. } => PolicyResult::Allow,
             Action::AskUser { .. } => PolicyResult::Allow,
+            Action::WebSearch { .. } => PolicyResult::Allow,
+            Action::WebFetch { .. } => PolicyResult::Allow,
             _ => PolicyResult::Ask,
         }
     }

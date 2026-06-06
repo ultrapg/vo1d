@@ -2,4 +2,6 @@ pub mod registry;
 pub mod files;
 pub mod shell;
 pub mod web;
+pub mod web_search;
+pub mod web_fetch;
 pub mod schema;

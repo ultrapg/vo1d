@@ -70,6 +70,12 @@ impl ToolExecutor {
                 std::io::stdin().read_line(&mut input)?;
                 Ok(format!("User response: {}", input.trim()))
             }
+            Action::WebSearch { query, num_results } => {
+                crate::tools::web_search::WebSearch::search(query, *num_results).await
+            }
+            Action::WebFetch { url, max_chars } => {
+                crate::tools::web_fetch::WebFetch::fetch(url, *max_chars).await
+            }
         }
     }
 }

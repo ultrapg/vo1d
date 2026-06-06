@@ -1,3 +1,8 @@
 pub mod paths;
 pub mod hardware;
 pub mod error;
+pub mod memory;
+pub mod compression;
+pub mod curriculum;
+pub mod self_correction;
+pub mod error_suggestions;

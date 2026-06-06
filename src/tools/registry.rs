@@ -175,6 +175,32 @@ impl ToolRegistry {
             }),
         });
 
+        tools.insert("web_search".to_string(), ToolInfo {
+            name: "web_search",
+            description: "Search the web using DuckDuckGo. Returns title, URL, and snippet for each result.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Search query" },
+                    "num_results": { "type": "integer", "description": "Number of results (max 10)" }
+                },
+                "required": ["query"]
+            }),
+        });
+
+        tools.insert("web_fetch".to_string(), ToolInfo {
+            name: "web_fetch",
+            description: "Fetch a URL and convert HTML content to markdown text.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "URL to fetch" },
+                    "max_chars": { "type": "integer", "description": "Maximum characters to return" }
+                },
+                "required": ["url"]
+            }),
+        });
+
         Self { tools }
     }
 

@@ -73,6 +73,11 @@ enum Commands {
     },
     /// List and manage saved sessions
     Sessions,
+    /// Run training curriculum from JSON file
+    Train {
+        /// Path to curriculum JSON file (or built-in name like "00_hello_world")
+        curriculum: String,
+    },
     /// Edit or view configuration
     Config,
     /// View audit logs
@@ -148,6 +153,9 @@ async fn main() -> Result<()> {
         Some(Commands::Sessions) => {
             run_sessions(ctx).await?;
         }
+        Some(Commands::Train { curriculum }) => {
+            run_train(ctx, &curriculum).await?;
+        }
         Some(Commands::Config) => {
             run_config(ctx).await?;
         }
@@ -218,6 +226,41 @@ async fn run_models(ctx: AppContext, action: Option<ModelAction>) -> Result<()> 
             vo1d::llm::registry::remove_model(&ctx, &id).await?;
         }
     }
+    Ok(())
+}
+
+async fn run_train(ctx: AppContext, curriculum: &str) -> Result<()> {
+    // Resolve curriculum path: check if it's a built-in name first
+    let curriculum_path = if !curriculum.contains('\\') && !curriculum.contains('/') && !curriculum.contains('.') {
+        let builtin = ctx.paths.curriculum_dir().join(format!("{}.json", curriculum));
+        if builtin.exists() {
+            builtin
+        } else {
+            // Try with leading digits prefix
+            let entries = std::fs::read_dir(ctx.paths.curriculum_dir())?;
+            let mut found = None;
+            for entry in entries {
+                let entry = entry?;
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.contains(curriculum) && name.ends_with(".json") {
+                    found = Some(entry.path());
+                    break;
+                }
+            }
+            match found {
+                Some(p) => p,
+                None => anyhow::bail!("Curriculum '{}' not found in {}", curriculum, ctx.paths.curriculum_dir().display()),
+            }
+        }
+    } else {
+        std::path::PathBuf::from(curriculum)
+    };
+
+    if !curriculum_path.exists() {
+        anyhow::bail!("Curriculum file not found: {}", curriculum_path.display());
+    }
+
+    vo1d::agent::train::run_curriculum(ctx, &curriculum_path.to_string_lossy()).await?;
     Ok(())
 }
 

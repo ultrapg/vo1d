@@ -4,6 +4,7 @@ pub mod session;
 pub mod checkpoint;
 pub mod parser;
 pub mod executor;
+pub mod train;
 
 use crate::AppContext;
 use crate::agent::session::Session;

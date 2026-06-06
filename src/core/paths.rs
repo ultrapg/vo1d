@@ -96,6 +96,18 @@ impl Vo1dPaths {
         self.root.join("plugins")
     }
 
+    pub fn memory_dir(&self) -> PathBuf {
+        self.root.join("memory")
+    }
+
+    pub fn curriculum_dir(&self) -> PathBuf {
+        self.root.join("curriculum")
+    }
+
+    pub fn train_sandbox_dir(&self) -> PathBuf {
+        self.workspace_dir().join("train_sandbox")
+    }
+
     pub fn resume_temp_path(&self) -> PathBuf {
         self.root.join("sessions").join("resume_temp.json")
     }
@@ -128,6 +140,7 @@ impl Vo1dPaths {
             self.downloads_dir(),
             self.tools_dir(),
             self.plugins_dir(),
+            self.memory_dir(),
         ];
 
         for dir in &dirs {

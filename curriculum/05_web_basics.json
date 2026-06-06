@@ -1,0 +1,22 @@
+{
+  "name": "Web Search and Fetch",
+  "description": "Practice searching the web and fetching web page content.",
+  "tasks": [
+    {
+      "id": "web_search_rust",
+      "description": "Use the web_search action to search for 'Rust programming language features'. Write the top result's title and URL to search_result.txt.",
+      "expected_outcome": "search_result.txt exists with web search results",
+      "evaluation": {
+        "check_file_exists": "search_result.txt"
+      }
+    },
+    {
+      "id": "web_fetch_page",
+      "description": "Use web_fetch to fetch the content from 'https://example.com'. Save the fetched markdown content to fetched_page.txt.",
+      "expected_outcome": "fetched_page.txt exists with web content",
+      "evaluation": {
+        "check_file_exists": "fetched_page.txt"
+      }
+    }
+  ]
+}

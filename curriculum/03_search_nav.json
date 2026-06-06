@@ -1,0 +1,32 @@
+{
+  "name": "Search and Navigation",
+  "description": "Practice searching for files, reading specific lines, and navigating the filesystem.",
+  "tasks": [
+    {
+      "id": "search_by_name",
+      "description": "Create 4 files: report-2024.txt, report-2025.txt, notes.txt, draft.txt. Then search for all files matching the pattern 'report-*.txt' and write the matching filenames to found.txt (one per line).",
+      "expected_outcome": "found.txt lists report-2024.txt and report-2025.txt",
+      "evaluation": {
+        "check_file_exists": "found.txt"
+      }
+    },
+    {
+      "id": "search_by_content",
+      "description": "Create two files: animals.txt with content 'cat\ndog\nbird\nfish' and colors.txt with content 'red\ngreen\nblue'. Read animals.txt and use the content to create a file named pets.txt containing only lines with 'cat' or 'dog'.",
+      "expected_outcome": "animals.txt and pets.txt exist",
+      "evaluation": {
+        "check_file_exists": "animals.txt",
+        "check_file_exists": "colors.txt"
+      }
+    },
+    {
+      "id": "read_line_range",
+      "description": "Create a file named lines.txt with 10 lines: 'Line 1' through 'Line 10'. Read only lines 4-6 from it. Write just those 3 lines to excerpt.txt.",
+      "expected_outcome": "excerpt.txt contains lines 4, 5, 6",
+      "evaluation": {
+        "check_file_exists": "lines.txt",
+        "check_file_exists": "excerpt.txt"
+      }
+    }
+  ]
+}

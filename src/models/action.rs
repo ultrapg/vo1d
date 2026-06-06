@@ -81,6 +81,18 @@ pub enum Action {
     AskUser {
         question: String,
     },
+    #[serde(rename = "web_search")]
+    WebSearch {
+        query: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        num_results: Option<usize>,
+    },
+    #[serde(rename = "web_fetch")]
+    WebFetch {
+        url: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_chars: Option<usize>,
+    },
 }
 
 fn default_dot() -> String {
@@ -109,6 +121,8 @@ impl Action {
             Action::HttpRequest { url, .. } => format!("HTTP request: {}", url),
             Action::Finish { output: _ } => "Finish task".to_string(),
             Action::AskUser { question } => format!("Ask user: {}", question),
+            Action::WebSearch { query, .. } => format!("Web search: {}", query),
+            Action::WebFetch { url, .. } => format!("Web fetch: {}", url),
         }
     }
 
@@ -198,6 +212,18 @@ mod tests {
     fn test_action_description_ask_user() {
         let a = Action::AskUser { question: "Proceed?".to_string() };
         assert_eq!(a.description(), "Ask user: Proceed?");
+    }
+
+    #[test]
+    fn test_action_description_web_search() {
+        let a = Action::WebSearch { query: "rust".to_string(), num_results: None };
+        assert_eq!(a.description(), "Web search: rust");
+    }
+
+    #[test]
+    fn test_action_description_web_fetch() {
+        let a = Action::WebFetch { url: "https://example.com".to_string(), max_chars: None };
+        assert_eq!(a.description(), "Web fetch: https://example.com");
     }
 
     #[test]

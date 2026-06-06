@@ -28,6 +28,7 @@ pub struct AppContext {
     pub security: security::SecurityManager,
     pub audit: security::audit::AuditLogger,
     pub model_registry: llm::registry::ModelRegistry,
+    pub memory: std::sync::Arc<std::sync::Mutex<core::memory::MemoryStore>>,
 }
 
 impl AppContext {
@@ -40,6 +41,9 @@ impl AppContext {
         let audit = security::audit::AuditLogger::new(&paths)?;
         let security = security::SecurityManager::new(&config, &audit)?;
         let model_registry = llm::registry::ModelRegistry::new(&paths, &config)?;
+        let memory = std::sync::Arc::new(std::sync::Mutex::new(
+            core::memory::MemoryStore::new(&paths.memory_dir())?
+        ));
 
         Ok(Self {
             config,
@@ -48,6 +52,7 @@ impl AppContext {
             security,
             audit,
             model_registry,
+            memory,
         })
     }
 }
