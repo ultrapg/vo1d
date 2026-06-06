@@ -9,7 +9,11 @@
 - **Local LLM inference** — Built-in llama.cpp backend, no cloud dependency
 - **Autonomous task execution** — ReAct agent loop that plans, acts, and iterates
 - **5 security modes** — Safe, Interactive, PowerUser, Autonomous, YOLO
-- **Tool system** — File read/write, command execution, directory listing, file search, HTTP requests, and more
+- **Web tools** — Web search (DuckDuckGo) and web page fetching (HTML→markdown conversion)
+- **File & shell tools** — Complete file operations, command execution, directory management, HTTP requests
+- **Context compression** — Opencode-style two-phase pruning & compacting (prune oversized tool outputs + compact old messages)
+- **Training curriculum** — Progressive learning system with 6 curriculum files and task evaluation
+- **Memory system** — Cross-session memory store with task history and learned patterns
 - **Audit logging** — Every action is logged with timestamps and security context
 - **Hardware profiling** — Auto-detects CPU/GPU/RAM and recommends compatible models
 - **Interactive REPL** — Chat-like interface for iterative task execution
@@ -32,18 +36,23 @@ vo1d/
 │   │   ├── planner.rs      # High-level plan generation
 │   │   ├── executor.rs     # Tool execution dispatch
 │   │   ├── session.rs      # Session state, save/resume
-│   │   └── checkpoint.rs   # Iteration checkpointing
+│   │   ├── checkpoint.rs   # Iteration checkpointing
+│   │   └── train.rs        # Training curriculum system
+│   ├── core/               # Core utilities
+│   │   ├── paths.rs        # Vo1dPaths (portable directory resolver)
+│   │   ├── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
+│   │   ├── memory.rs       # Cross-session memory store
+│   │   ├── compression.rs  # Context compression (prune+compact)
+│   │   └── curriculum.rs   # Curriculum evaluation & loading
 │   ├── llm/                # LLM backends
-│   │   ├── backend.rs      # LlmBackend trait definition
-│   │   ├── builtin.rs      # llama.cpp backend (via llama-cpp-2)
-│   │   ├── registry.rs     # Model registry (download/cache/lookup)
-│   │   └── downloader.rs   # Model download from Hugging Face
 │   ├── tools/              # Tool system
 │   │   ├── mod.rs          # Module exports
 │   │   ├── registry.rs     # Tool registry (tool metadata)
-│   │   ├── files.rs        # File operations (read, write, delete, list, search, copy, mkdir, metadata)
+│   │   ├── files.rs        # File operations
 │   │   ├── shell.rs        # Shell command execution
 │   │   ├── web.rs          # HTTP request tool
+│   │   ├── web_search.rs   # Web search (DuckDuckGo)
+│   │   ├── web_fetch.rs    # Web page fetch & HTML→markdown
 │   │   └── schema.rs       # JSON schema helpers
 │   ├── security/           # Security & policy system
 │   │   ├── modes.rs        # SecurityMode enum
@@ -90,6 +99,9 @@ cd vo1d
 # Build with built-in llama.cpp (recommended for local-only use)
 cargo build --features llamacpp-builtin --release
 
+# Build with web tools (requires websearch and html2md crates)
+cargo build --features llamacpp-builtin --release
+
 # Or with Vulkan GPU acceleration
 cargo build --features vulkan --release
 
@@ -109,6 +121,11 @@ cargo build --features full --release
 | `llamacpp-server` | llama.cpp server backend |
 | `custom-api` | Custom OpenAI-compatible API backend |
 | `full` | All backends |
+
+**Web Tools Support:**
+- `websearch = "0.1"` and `html2md = "0.2"` dependencies enable web search and web fetch tools
+- Web search: DuckDuckGo provider (no API key required)
+- Web fetch: HTTP requests with HTML-to-markdown conversion
 
 ### Install a Model
 
@@ -144,32 +161,41 @@ vo1d task "search for todos in the codebase" --debug
 
 # Resume a previous session
 vo1d --resume <session-id>
+
+# Train on a curriculum (progressive learning)
+vo1d train 00_hello_world
+vo1d train curriculum/my_custom_curriculum.json
 ```
 
 ---
 
 ## How It Works
 
-vo1d uses a **ReAct** (Reasoning + Acting) agent loop:
+vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **context compression**:
 
-1. **System prompt** is constructed with current mode, workspace path, and available tools
+1. **System prompt** is constructed with current mode, workspace path, memory context, and available tools
 2. **User task** is appended as a message (ChatML format: `<|im_start|>system` / `<|im_start|>user` / `<|im_start|>assistant`)
 3. **Model generates** a response containing a JSON action block
-4. **Parser extracts** the JSON action (e.g. `{"action": "write_file", ...}`)
+4. **Parser extracts** the JSON action (e.g. `{"action": "web_search", "query": "rust programming"}`)
 5. **Security policy** evaluates the action against the current mode
 6. **Action is executed** and the result (or error) is appended to the conversation
-7. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
+7. **Context compression** occurs if conversation exceeds ~80% of context limit:
+   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 chars)
+   - **Phase 2 (Compact)**: Keep system prompt, user task, and recent messages; compress old sections
+8. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
 
 ```
- User input → [System Prompt + Conversation] → LLM → JSON Action
-                                                       ↓
-                                              Security Policy
-                                                       ↓
-                                              Tool Executor → Result
-                                                       ↓
-                                              Append to Conversation
-                                                       ↓
-                                              Loop or Finish
+  User input → [System Prompt + Conversation] → LLM → JSON Action
+                                                        ↓
+                                               Security Policy
+                                                        ↓
+                                               Tool Executor → Result
+                                                        ↓
+                                               Append to Conversation
+                                                        ↓
+                                               Context Compression (if needed)
+                                                        ↓
+                                               Loop or Finish
 ```
 
 ---
@@ -286,6 +312,26 @@ Batch delete by glob pattern (e.g. `delete all txts`):
 ```
 `method` defaults to `GET`. `headers` and `body` are optional.
 
+### Web Search
+```json
+{
+  "action": "web_search",
+  "query": "rust programming language features",
+  "num_results": 5
+}
+```
+Searches the web using DuckDuckGo (no API key required). `num_results` defaults to 5 (max 10).
+
+### Web Fetch
+```json
+{
+  "action": "web_fetch",
+  "url": "https://example.com",
+  "max_chars": 5000
+}
+```
+Fetches a web page and converts HTML to markdown. `max_chars` defaults to 8000 (max 50000).
+
 ### Finish (Task Complete)
 ```json
 {
@@ -317,6 +363,109 @@ Prompts the user for approval.
 | **YOLO** | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto |
 
 Modes are set via the `--mode` flag or configured in `settings.toml`.
+
+## Context Compression
+
+To handle long conversations within limited context windows, vo1d implements **opencode-style context compression** that activates when the conversation exceeds ~80% of the model's context limit.
+
+### Compression Strategy
+
+1. **Two-Phase Process**:
+   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 characters)
+   - **Phase 2 (Compact)**: Apply sliding window to keep critical messages
+
+2. **Priority-Based Message Selection**:
+   - **Critical**: System prompt (always kept)
+   - **High**: User's original task (always kept)
+   - **Normal**: Recent assistant/user messages (last 8+ messages)
+   - **Low**: Recent tool results (truncated if long)
+   - **Background**: Old messages (compressed into summaries)
+
+3. **Memory Integration**: Compressed sections are summarized and stored in the memory system for future reference.
+
+### Configuration
+
+Compression settings are configurable in `settings.toml`:
+```toml
+[llm.builtin]
+context_size = 4096
+# Compression happens at ~80% usage (3276 tokens)
+```
+
+## Train Mode
+
+Train mode provides a structured learning environment where vo1d works through progressive curriculum of tasks. Each curriculum consists of a JSON file with sequential tasks, evaluation criteria, and memory accumulation.
+
+### Using Train Mode
+
+```bash
+# Run a built-in curriculum
+vo1d train 00_hello_world           # Basic file operations
+vo1d train 01_file_ops            # File read/write/append/copy
+vo1d train 02_directory_ops       # Directory operations
+vo1d train 03_search_nav          # File search and navigation
+vo1d train 04_shell_basics        # Shell command basics
+vo1d train 05_web_basics          # Web search and fetch
+
+# Use a custom curriculum file
+vo1d train my_curriculum.json
+```
+
+### Curriculum Format
+
+Curricula are JSON files with this structure:
+```json
+{
+  "name": "Hello World — File Creation",
+  "description": "Learn to create text files",
+  "tasks": [
+    {
+      "id": "create_hello_txt",
+      "description": "Create a file named hello.txt with content 'Hello, World!'",
+      "expected_outcome": "hello.txt exists with content 'Hello, World!'",
+      "evaluation": {
+        "check_file_exists": "hello.txt",
+        "check_file_content": ["hello.txt::Hello, World!"]
+      }
+    }
+  ]
+}
+```
+
+### Task Evaluation
+
+Each task can have evaluation criteria:
+- `check_file_exists`: File must exist at specified path
+- `check_file_content`: File must contain specified text(s)
+- `check_directory_exists`: Directory must exist at specified path
+- `check_command_output`: Command output must contain specified text(s)
+
+### Training Features
+
+- **Sandboxed execution**: Each task runs in a clean sandbox directory
+- **Memory accumulation**: Task outcomes are stored in memory across the curriculum
+- **Progress tracking**: Shows task-by-task progress with success/failure indicators
+- **Self-improvement**: Successful patterns are stored as learned patterns in memory
+- **Detailed feedback**: Shows specific evaluation results for each task
+
+### Built-in Curricula
+
+| Curriculum | Description | Tasks |
+|-----------|-------------|-------|
+| `00_hello_world` | Basic file creation | 3 tasks |
+| `01_file_ops` | File operations (read, write, append, copy) | 3 tasks |
+| `02_directory_ops` | Directory operations and listing | 3 tasks |
+| `03_search_nav` | File search and navigation | 3 tasks |
+| `04_shell_basics` | Shell command usage | 3 tasks |
+| `05_web_basics` | Web search and fetch | 2 tasks |
+
+### Memory Integration
+
+Train mode enhances the memory system by:
+- Adding completed tasks to task history
+- Storing successful patterns as learned patterns
+- Tracking outcomes and execution times
+- Providing context for future tasks in subsequent runs
 
 ---
 
