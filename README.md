@@ -39,14 +39,12 @@ vo1d/
 │   │   ├── registry.rs     # Model registry (download/cache/lookup)
 │   │   └── downloader.rs   # Model download from Hugging Face
 │   ├── tools/              # Tool system
-│   │   ├── registry.rs     # Tool registry
-│   │   ├── read_file.rs    # Read file tool
-│   │   ├── write_file.rs   # Write file tool
-│   │   ├── execute.rs      # Command execution tool
-│   │   ├── list_dir.rs     # Directory listing tool
-│   │   ├── search_files.rs # File search tool
-│   │   ├── http.rs         # HTTP request tool
-│   │   └── helpers.rs      # Path resolution helpers
+│   │   ├── mod.rs          # Module exports
+│   │   ├── registry.rs     # Tool registry (tool metadata)
+│   │   ├── files.rs        # File operations (read, write, delete, list, search, copy, mkdir, metadata)
+│   │   ├── shell.rs        # Shell command execution
+│   │   ├── web.rs          # HTTP request tool
+│   │   └── schema.rs       # JSON schema helpers
 │   ├── security/           # Security & policy system
 │   │   ├── modes.rs        # SecurityMode enum
 │   │   ├── policy.rs       # Policy evaluation engine
@@ -155,7 +153,7 @@ vo1d --resume <session-id>
 vo1d uses a **ReAct** (Reasoning + Acting) agent loop:
 
 1. **System prompt** is constructed with current mode, workspace path, and available tools
-2. **User task** is appended as a message
+2. **User task** is appended as a message (ChatML format: `<|im_start|>system` / `<|im_start|>user` / `<|im_start|>assistant`)
 3. **Model generates** a response containing a JSON action block
 4. **Parser extracts** the JSON action (e.g. `{"action": "write_file", ...}`)
 5. **Security policy** evaluates the action against the current mode
@@ -241,6 +239,15 @@ Uses recursive glob matching.
   "path": "old-file.txt"
 }
 ```
+Batch delete by glob pattern (e.g. `delete all txts`):
+```json
+{
+  "action": "delete_file",
+  "path": ".",
+  "pattern": "*.txt"
+}
+```
+`path` defaults to `"."` when `pattern` is set. `delete_files` is accepted as an alias for `delete_file`.
 
 ### Copy File
 ```json
@@ -533,6 +540,8 @@ cargo test --features llamacpp-builtin
 | `Model file not found` | Run `vo1d models install <model-id>` |
 | `Failed to load model at startup` | The model file is missing or corrupt. Reinstall with `vo1d models install <model-id>` |
 | `spawn_blocking panicked` in `builtin.rs` | Usually a model crash. Check RAM usage and reduce `context_size` or `gpu_layers` |
+| Model keeps generating infinite tool calls | The model may not be receiving the correct ChatML prompt. Check `add_bos_token` matches the model metadata. Qwen2.5 expects `<|im_start|>` tags |
+| LLM output is garbled or mixed with C library stderr | llama.cpp writes to stderr via CRT `fprintf`. vo1d suppresses this with `_dup2` at the CRT file-descriptor level; verify `stderr_guard.rs` compiled correctly |
 | Build fails with linker errors on Windows | You need MSVC build tools (Visual Studio Build Tools or Visual Studio). The `+crt-static` flag must NOT be in `.cargo/config.toml` |
 
 ---
