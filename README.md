@@ -2,7 +2,7 @@
 
 **Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, and more. All inference runs entirely offline on your hardware.
 
-> $\color{orange}{\textbf{\Large WORK IN PROGRESS}}$
+> WORK IN PROGRESS
 
 ## Features
 
