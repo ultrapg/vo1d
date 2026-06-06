@@ -121,13 +121,11 @@ async fn main() -> Result<()> {
     }
 
     // Initialize application context
-    let ctx = AppContext::new().await?;
+    let mut ctx = AppContext::new().await?;
 
-    // Override security mode if provided
+    // Override security mode if provided via CLI
     if cli.yolo || cli.mode.is_some() {
-        let _mode = resolve_security_mode(&cli);
-        // Note: security mode override happens through ctx.security.set_mode()
-        // Full SecurityManager replacement is handled at session start
+        ctx.security.set_mode(security_mode);
     }
 
     // Override workspace if provided

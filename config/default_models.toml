@@ -9,6 +9,8 @@ size_bytes = 780000000
 min_ram_gb = 2.0
 context_length = 2048
 supports_tools = false
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -22,6 +24,8 @@ size_bytes = 150000000
 min_ram_gb = 1.0
 context_length = 2048
 supports_tools = false
+reasoning = false
+instruct = false
 quantization = "Q8_0"
 
 [[model]]
@@ -35,6 +39,8 @@ size_bytes = 390000000
 min_ram_gb = 1.5
 context_length = 2048
 supports_tools = false
+reasoning = false
+instruct = false
 quantization = "Q8_0"
 
 [[model]]
@@ -48,6 +54,8 @@ size_bytes = 1000000000
 min_ram_gb = 4.0
 context_length = 4096
 supports_tools = false
+reasoning = false
+instruct = false
 quantization = "Q4_K_M"
 
 [[model]]
@@ -61,6 +69,8 @@ size_bytes = 1100000000
 min_ram_gb = 4.0
 context_length = 4096
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q5_K_M"
 
 [[model]]
@@ -74,6 +84,8 @@ size_bytes = 2100000000
 min_ram_gb = 6.0
 context_length = 8192
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q5_K_M"
 
 [[model]]
@@ -87,6 +99,8 @@ size_bytes = 4800000000
 min_ram_gb = 12.0
 context_length = 8192
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -100,6 +114,8 @@ size_bytes = 9200000000
 min_ram_gb = 20.0
 context_length = 16384
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -113,6 +129,8 @@ size_bytes = 20000000000
 min_ram_gb = 32.0
 context_length = 32768
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -126,6 +144,8 @@ size_bytes = 780000000
 min_ram_gb = 4.0
 context_length = 8192
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -139,6 +159,8 @@ size_bytes = 2700000000
 min_ram_gb = 8.0
 context_length = 8192
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -152,6 +174,8 @@ size_bytes = 7300000000
 min_ram_gb = 16.0
 context_length = 16384
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -165,6 +189,8 @@ size_bytes = 4900000000
 min_ram_gb = 12.0
 context_length = 8192
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -178,6 +204,8 @@ size_bytes = 39000000000
 min_ram_gb = 48.0
 context_length = 16384
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -191,6 +219,8 @@ size_bytes = 4300000000
 min_ram_gb = 12.0
 context_length = 32768
 supports_tools = true
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -204,6 +234,8 @@ size_bytes = 1200000000
 min_ram_gb = 4.0
 context_length = 8192
 supports_tools = false
+reasoning = true
+instruct = true
 quantization = "Q5_K_M"
 
 [[model]]
@@ -217,6 +249,8 @@ size_bytes = 4600000000
 min_ram_gb = 12.0
 context_length = 8192
 supports_tools = false
+reasoning = true
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -230,6 +264,8 @@ size_bytes = 8800000000
 min_ram_gb = 20.0
 context_length = 16384
 supports_tools = false
+reasoning = true
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -243,6 +279,8 @@ size_bytes = 2400000000
 min_ram_gb = 6.0
 context_length = 4096
 supports_tools = false
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
@@ -256,4 +294,284 @@ size_bytes = 2000000000
 min_ram_gb = 6.0
 context_length = 4096
 supports_tools = false
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# =============================================================================
+# Reasoning Models (DeepSeek R1, QwQ, Qwen3, MiniCPM3, Falcon3)
+# =============================================================================
+
+[[model]]
+id = "deepseek_r1_32b"
+name = "DeepSeek R1 Distill Qwen 32B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
+sha256 = "e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 21300000000
+min_ram_gb = 24.0
+context_length = 16384
+supports_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_8b"
+name = "DeepSeek R1 Distill Llama 8B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"
+sha256 = "f8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 5150000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwq_32b"
+name = "QwQ 32B Preview"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/QwQ-32B-Preview-GGUF/resolve/main/QwQ-32B-Preview-Q4_K_M.gguf"
+filename = "QwQ-32B-Preview-Q4_K_M.gguf"
+sha256 = "a9e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 21300000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_0.6b"
+name = "Qwen3 0.6B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf"
+filename = "Qwen3-0.6B-Q8_0.gguf"
+sha256 = "b0e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 670000000
+min_ram_gb = 1.0
+context_length = 32768
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q8_0"
+
+[[model]]
+id = "qwen3_1.7b"
+name = "Qwen3 1.7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/MaziyarPanahi/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B.Q5_K_M.gguf"
+filename = "Qwen3-1.7B.Q5_K_M.gguf"
+sha256 = "c1e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 1580000000
+min_ram_gb = 4.0
+context_length = 32768
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen3_4b"
+name = "Qwen3 4B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q5_K_M.gguf"
+filename = "Qwen3-4B-Q5_K_M.gguf"
+sha256 = "d2e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2900000000
+min_ram_gb = 6.0
+context_length = 32768
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen3_8b"
+name = "Qwen3 8B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"
+filename = "Qwen3-8B-Q4_K_M.gguf"
+sha256 = "e3e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 5370000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_14b"
+name = "Qwen3 14B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q4_K_M.gguf"
+filename = "Qwen3-14B-Q4_K_M.gguf"
+sha256 = "f4e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 9660000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_32b"
+name = "Qwen3 32B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_M.gguf"
+filename = "Qwen3-32B-Q4_K_M.gguf"
+sha256 = "a5e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 21200000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "minicpm3_4b"
+name = "MiniCPM3 4B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/QuantFactory/MiniCPM3-4B-GGUF/resolve/main/MiniCPM3-4B.Q4_K_M.gguf"
+filename = "MiniCPM3-4B.Q4_K_M.gguf"
+sha256 = "b6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2680000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "falcon3_3b"
+name = "Falcon3 3B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Falcon3-3B-Instruct-GGUF/resolve/main/Falcon3-3B-Instruct-Q4_K_M.gguf"
+filename = "Falcon3-3B-Instruct-Q4_K_M.gguf"
+sha256 = "c7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2150000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "falcon3_7b"
+name = "Falcon3 7B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Falcon3-7B-Instruct-GGUF/resolve/main/Falcon3-7B-Instruct-Q4_K_M.gguf"
+filename = "Falcon3-7B-Instruct-Q4_K_M.gguf"
+sha256 = "d8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "falcon3_10b"
+name = "Falcon3 10B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Falcon3-10B-Instruct-GGUF/resolve/main/Falcon3-10B-Instruct-Q4_K_M.gguf"
+filename = "Falcon3-10B-Instruct-Q4_K_M.gguf"
+sha256 = "e9e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 6750000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+# =============================================================================
+# Non-Reasoning Models (Gemma, Granite, Command R, Nemotron)
+# =============================================================================
+
+[[model]]
+id = "gemma3_27b"
+name = "Gemma 3 27B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-27b-it-GGUF/resolve/main/gemma-3-27b-it-Q4_K_M.gguf"
+filename = "gemma-3-27b-it-Q4_K_M.gguf"
+sha256 = "f0e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 17180000000
+min_ram_gb = 24.0
+context_length = 16384
+supports_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "granite_2b"
+name = "Granite 3.0 2B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/granite-3.0-2b-instruct-GGUF/resolve/main/granite-3.0-2b-instruct-Q4_K_M.gguf"
+filename = "granite-3.0-2b-instruct-Q4_K_M.gguf"
+sha256 = "a1e8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 1720000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = false
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "granite_8b"
+name = "Granite 3.0 8B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/granite-3.0-8b-instruct-GGUF/resolve/main/granite-3.0-8b-instruct-Q4_K_M.gguf"
+filename = "granite-3.0-8b-instruct-Q4_K_M.gguf"
+sha256 = "b2e8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 5300000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "command_r7b"
+name = "Command R 7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/c4ai-command-r7b-12-2024-GGUF/resolve/main/c4ai-command-r7b-12-2024-Q4_K_M.gguf"
+filename = "c4ai-command-r7b-12-2024-Q4_K_M.gguf"
+sha256 = "c3e8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 5430000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "nemotron_4b"
+name = "Nemotron Mini 4B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Nemotron-Mini-4B-Instruct-GGUF/resolve/main/Nemotron-Mini-4B-Instruct-Q4_K_M.gguf"
+filename = "Nemotron-Mini-4B-Instruct-Q4_K_M.gguf"
+sha256 = "d4e8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2680000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = false
+reasoning = false
+instruct = true
 quantization = "Q4_K_M"

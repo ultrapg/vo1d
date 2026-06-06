@@ -150,16 +150,20 @@ impl Vo1dPaths {
     }
 
     /// Check if a given path is within the workspace boundary.
+    /// Walks up the directory tree for non-existent paths (e.g. about-to-be-deleted files).
     pub fn is_within_workspace(&self, path: &Path) -> bool {
-        let canonical = match path.canonicalize() {
-            Ok(p) => p,
-            Err(_) => return false,
-        };
         let ws = match self.workspace_dir().canonicalize() {
-            Ok(p) => p,
+            Ok(w) => w,
             Err(_) => return false,
         };
-        canonical.starts_with(&ws)
+        let mut p = Some(path);
+        while let Some(current) = p {
+            if let Ok(canonical) = current.canonicalize() {
+                return canonical.starts_with(&ws);
+            }
+            p = current.parent();
+        }
+        false
     }
 
     /// Check if a given path is within the VO1D root (safe for internal ops).

@@ -16,6 +16,10 @@ pub struct CustomModelEntry {
     pub context_length: u32,
     pub supports_tools: bool,
     pub quantization: String,
+    #[serde(default)]
+    pub reasoning: bool,
+    #[serde(default)]
+    pub instruct: bool,
 }
 
 /// Container for custom model registrations from models.toml.

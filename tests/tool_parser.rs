@@ -90,16 +90,16 @@ fn test_parse_heuristic_search_files() {
 }
 
 #[test]
-fn test_parse_invalid_input_fails() {
+fn test_parse_invalid_input_finish_fallback() {
     let input = "This is just a random sentence with no action.";
-    let result = parser().parse(input, false);
-    assert!(result.is_err());
+    let result = parser().parse(input, false).unwrap();
+    assert!(matches!(result, Action::Finish { .. }));
 }
 
 #[test]
-fn test_parse_empty_input_fails() {
-    let result = parser().parse("", false);
-    assert!(result.is_err());
+fn test_parse_empty_input_finish_fallback() {
+    let result = parser().parse("", false).unwrap();
+    assert!(matches!(result, Action::Finish { .. }));
 }
 
 #[test]

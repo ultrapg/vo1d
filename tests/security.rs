@@ -185,7 +185,7 @@ fn test_yolo_mode_allows_everything() {
         Action::ReadFile { path: "/etc/passwd".to_string(), start_line: None, end_line: None },
         Action::WriteFile { path: "/etc/shadow".to_string(), content: "hack".to_string(), append: None },
         Action::ExecuteCommand { command: "rm -rf /".to_string(), timeout: None, workdir: None },
-        Action::DeleteFile { path: "important.txt".to_string() },
+        Action::DeleteFile { path: "important.txt".to_string(), pattern: None },
         Action::HttpRequest { url: "http://evil.com".to_string(), method: None, headers: None, body: None },
     ];
     for action in &actions {

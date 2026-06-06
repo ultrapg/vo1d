@@ -110,13 +110,7 @@ impl ShellExec {
 fn detect_shell() -> String {
     #[cfg(windows)]
     {
-        // Check for PowerShell 7 first, then fall back
-        if which::which("pwsh").is_ok() {
-            return "pwsh".to_string();
-        }
-        if which::which("powershell").is_ok() {
-            return "powershell".to_string();
-        }
+        // Prefer cmd.exe so the model's natural %VAR% syntax works
         "cmd".to_string()
     }
 

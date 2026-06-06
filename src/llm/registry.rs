@@ -20,6 +20,10 @@ pub struct ModelEntry {
     pub context_length: u32,
     pub supports_tools: bool,
     pub quantization: String,
+    #[serde(default)]
+    pub reasoning: bool,
+    #[serde(default)]
+    pub instruct: bool,
 }
 
 /// The model registry holds all known models.
@@ -65,6 +69,8 @@ impl ModelRegistry {
                 context_length: c.context_length,
                 supports_tools: c.supports_tools,
                 quantization: c.quantization,
+                reasoning: c.reasoning,
+                instruct: c.instruct,
             });
         }
 

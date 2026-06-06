@@ -122,8 +122,8 @@ pub async fn list_models(ctx: &AppContext) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<30} {:<10} {:<12} {:<8} {:<20}",
-        "ID", "Name", "Size", "Quant", "RAM", "Status");
+    println!("{:<20} {:<30} {:<10} {:<7} {:<7} {:<8} {:<20}",
+        "ID", "Name", "Size", "Reason", "Instr", "RAM", "Status");
     println!("{}", "-".repeat(110));
 
     for model in all {
@@ -140,11 +140,12 @@ pub async fn list_models(ctx: &AppContext) -> Result<()> {
             format!("{:.0} MB", model.size_bytes as f64 / 1_048_576.0)
         };
 
-        println!("{:<20} {:<30} {:<10} {:<12} {:<8} {:<20}",
+        println!("{:<20} {:<30} {:<10} {:<7} {:<7} {:<8} {:<20}",
             model.id,
             model.name.chars().take(30).collect::<String>(),
             size_str,
-            model.quantization,
+            if model.reasoning { "✓" } else { "" },
+            if model.instruct { "✓" } else { "" },
             format!("{:.0} GB", model.min_ram_gb),
             status,
         );
