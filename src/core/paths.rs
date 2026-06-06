@@ -1,0 +1,177 @@
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+use tracing::info;
+
+/// Resolves all VO1D paths relative to the executable location for full portability.
+#[derive(Clone)]
+pub struct Vo1dPaths {
+    /// Root directory containing the binary
+    root: PathBuf,
+}
+
+impl Vo1dPaths {
+    /// Create a new path resolver from the current executable location.
+    pub fn new() -> Result<Self> {
+        let exe = std::env::current_exe()
+            .context("Failed to get current executable path")?;
+        let root = exe
+            .parent()
+            .context("Failed to get executable parent directory")?
+            .to_path_buf();
+        info!("VO1D root directory: {}", root.display());
+        Ok(Self { root })
+    }
+
+    pub fn root_dir(&self) -> &Path {
+        &self.root
+    }
+
+    pub fn config_dir(&self) -> PathBuf {
+        self.root.join("config")
+    }
+
+    pub fn models_dir(&self) -> PathBuf {
+        self.root.join("models")
+    }
+
+    pub fn models_backend_dir(&self, backend: &str) -> PathBuf {
+        self.root.join("models").join(backend)
+    }
+
+    pub fn workspace_dir(&self) -> PathBuf {
+        self.root.join("workspace")
+    }
+
+    pub fn cache_dir(&self) -> PathBuf {
+        self.root.join("cache")
+    }
+
+    pub fn http_cache_dir(&self) -> PathBuf {
+        self.root.join("cache").join("http_cache")
+    }
+
+    pub fn partial_download_dir(&self) -> PathBuf {
+        self.root.join("cache").join("partial")
+    }
+
+    pub fn sessions_dir(&self) -> PathBuf {
+        self.root.join("sessions")
+    }
+
+    pub fn session_dir(&self, session_id: &str) -> PathBuf {
+        self.root.join("sessions").join(session_id)
+    }
+
+    pub fn session_checkpoints_dir(&self, session_id: &str) -> PathBuf {
+        self.root.join("sessions").join(session_id).join("checkpoints")
+    }
+
+    pub fn logs_dir(&self) -> PathBuf {
+        self.root.join("logs")
+    }
+
+    pub fn audit_log_path(&self) -> PathBuf {
+        let date = chrono::Utc::now().format("%Y-%m-%d");
+        self.root.join("logs").join(format!("audit_{}.jsonl", date))
+    }
+
+    pub fn yolo_audit_log_path(&self) -> PathBuf {
+        let date = chrono::Utc::now().format("%Y-%m-%d");
+        self.root.join("logs").join(format!("yolo_audit_{}.jsonl", date))
+    }
+
+    pub fn error_log_path(&self) -> PathBuf {
+        self.root.join("logs").join("errors.jsonl")
+    }
+
+    pub fn downloads_dir(&self) -> PathBuf {
+        self.root.join("downloads")
+    }
+
+    pub fn tools_dir(&self) -> PathBuf {
+        self.root.join("downloads").join("tools")
+    }
+
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.root.join("plugins")
+    }
+
+    pub fn resume_temp_path(&self) -> PathBuf {
+        self.root.join("sessions").join("resume_temp.json")
+    }
+
+    pub fn backup_dir(&self) -> PathBuf {
+        let ts = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+        self.root.join("workspace").join(format!(".vo1d_backup.{}", ts))
+    }
+
+    pub fn model_index_path(&self) -> PathBuf {
+        self.root.join("cache").join("model_index.json")
+    }
+
+    pub fn default_models_config(&self) -> PathBuf {
+        self.root.join("config").join("default_models.toml")
+    }
+
+    /// Create all required directories if they don't exist.
+    pub fn ensure_dirs(&self) -> Result<()> {
+        let dirs = [
+            self.config_dir(),
+            self.models_dir(),
+            self.models_backend_dir("llamacpp"),
+            self.workspace_dir(),
+            self.cache_dir(),
+            self.http_cache_dir(),
+            self.partial_download_dir(),
+            self.sessions_dir(),
+            self.logs_dir(),
+            self.downloads_dir(),
+            self.tools_dir(),
+            self.plugins_dir(),
+        ];
+
+        for dir in &dirs {
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("Failed to create directory: {}", dir.display()))?;
+        }
+
+        info!("VO1D directory structure initialized at {}", self.root.display());
+        Ok(())
+    }
+
+    /// Resolve a path relative to the workspace, or absolute if already absolute.
+    pub fn resolve_workspace_path(&self, user_path: &str) -> PathBuf {
+        let path = PathBuf::from(user_path);
+        if path.is_absolute() {
+            path
+        } else {
+            self.workspace_dir().join(path)
+        }
+    }
+
+    /// Check if a given path is within the workspace boundary.
+    pub fn is_within_workspace(&self, path: &Path) -> bool {
+        let canonical = match path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        let ws = match self.workspace_dir().canonicalize() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        canonical.starts_with(&ws)
+    }
+
+    /// Check if a given path is within the VO1D root (safe for internal ops).
+    pub fn is_within_root(&self, path: &Path) -> bool {
+        let canonical = match path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        let root = match self.root.canonicalize() {
+            Ok(p) => p,
+            Err(_) => return false,
+        };
+        canonical.starts_with(&root)
+    }
+}

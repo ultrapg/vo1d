@@ -1,0 +1,114 @@
+[workspace]
+members = ["."]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+indicatif = "0.17"
+
+[package]
+name = "vo1d"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "VO1D - Local-first autonomous AI execution agent"
+authors = ["VO1D Contributors"]
+
+[lib]
+name = "vo1d"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vo1d"
+path = "src/main.rs"
+
+[features]
+default = []
+ollama = []
+lmstudio = []
+llamacpp-server = []
+custom-api = []
+llamacpp-builtin = ["dep:llama-cpp-2"]
+vulkan = ["llamacpp-builtin", "llama-cpp-2?/vulkan"]
+full = ["ollama", "lmstudio", "llamacpp-server", "custom-api", "llamacpp-builtin"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec", "time", "io"] }
+futures-util = "0.3"
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+# CLI
+clap.workspace = true
+
+# HTTP (core - needed for model downloads)
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+
+# LLM Inference
+llama-cpp-2 = { version = "0.1", optional = true }
+encoding_rs = "0.8"
+
+# System
+sysinfo = "0.33"
+which = "7"
+
+# Security / Crypto
+sha2 = "0.10"
+hex = "0.4"
+
+# Logging
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender = "0.2"
+
+# Async trait support
+async-trait = "0.1"
+
+# Errors
+anyhow.workspace = true
+thiserror.workspace = true
+
+# Utilities
+regex = "1"
+uuid.workspace = true
+chrono.workspace = true
+schemars = { version = "1", features = ["chrono04"] }
+indicatif.workspace = true
+rand = "0.8"
+
+# Path handling
+path-clean = "1.0"
+
+
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["shellapi", "winuser", "processthreadsapi", "securitybaseapi", "winnt", "handleapi"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+# None needed for now
+
+[lints.rust]
+unused = "warn"

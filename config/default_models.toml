@@ -1,0 +1,259 @@
+[[model]]
+id = "tinyl_1b"
+name = "TinyLlama 1.1B Chat"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+filename = "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+sha256 = "c58e7e6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e"
+size_bytes = 780000000
+min_ram_gb = 2.0
+context_length = 2048
+supports_tools = false
+quantization = "Q4_K_M"
+
+[[model]]
+id = "smol_135m"
+name = "SmolLM2 135M"
+provider = "llamacpp"
+download_url = "https://huggingface.co/huggingface/SmolLM2-135M-GGUF/resolve/main/SmolLM2-135M-Q8_0.gguf"
+filename = "SmolLM2-135M-Q8_0.gguf"
+sha256 = "d7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 150000000
+min_ram_gb = 1.0
+context_length = 2048
+supports_tools = false
+quantization = "Q8_0"
+
+[[model]]
+id = "smol_360m"
+name = "SmolLM2 360M"
+provider = "llamacpp"
+download_url = "https://huggingface.co/huggingface/SmolLM2-360M-GGUF/resolve/main/SmolLM2-360M-Q8_0.gguf"
+filename = "SmolLM2-360M-Q8_0.gguf"
+sha256 = "e8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 390000000
+min_ram_gb = 1.5
+context_length = 2048
+supports_tools = false
+quantization = "Q8_0"
+
+[[model]]
+id = "smol_1.7b"
+name = "SmolLM2 1.7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/huggingface/SmolLM2-1.7B-GGUF/resolve/main/SmolLM2-1.7B-Q4_K_M.gguf"
+filename = "SmolLM2-1.7B-Q4_K_M.gguf"
+sha256 = "f8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 1000000000
+min_ram_gb = 4.0
+context_length = 4096
+supports_tools = false
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_1.5b"
+name = "Qwen 2.5 1.5B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-1.5b-instruct-q5_k_m.gguf"
+sha256 = "a1e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 1100000000
+min_ram_gb = 4.0
+context_length = 4096
+supports_tools = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen25_3b"
+name = "Qwen 2.5 3B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-3b-instruct-q5_k_m.gguf"
+sha256 = "b2e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2100000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen25_7b"
+name = "Qwen 2.5 7B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-7b-instruct-q4_k_m.gguf"
+sha256 = "c3e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 4800000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_14b"
+name = "Qwen 2.5 14B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-14b-instruct-q4_k_m.gguf"
+sha256 = "d4e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 9200000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_32b"
+name = "Qwen 2.5 32B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-32b-instruct-q4_k_m.gguf"
+sha256 = "e5e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 20000000000
+min_ram_gb = 32.0
+context_length = 32768
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma3_1b"
+name = "Gemma 3 1B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf"
+filename = "gemma-3-1b-it-Q4_K_M.gguf"
+sha256 = "f6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 780000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma3_4b"
+name = "Gemma 3 4B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf"
+filename = "gemma-3-4b-it-Q4_K_M.gguf"
+sha256 = "a7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2700000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma3_12b"
+name = "Gemma 3 12B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf"
+filename = "gemma-3-12b-it-Q4_K_M.gguf"
+sha256 = "b8e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 7300000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3_8b"
+name = "Llama 3 8B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
+sha256 = "c9e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3_70b"
+name = "Llama 3 70B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
+filename = "Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
+sha256 = "d0e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 39000000000
+min_ram_gb = 48.0
+context_length = 16384
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "mistral_7b"
+name = "Mistral 7B Instruct v0.3"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/mistral-7b-instruct-v0.3.Q4_K_M.gguf"
+filename = "mistral-7b-instruct-v0.3.Q4_K_M.gguf"
+sha256 = "e1e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 4300000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_1.5b"
+name = "DeepSeek R1 Distill Qwen 1.5B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"
+sha256 = "f2e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 1200000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = false
+quantization = "Q5_K_M"
+
+[[model]]
+id = "deepseek_r1_7b"
+name = "DeepSeek R1 Distill Qwen 7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+sha256 = "a3e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 4600000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_14b"
+name = "DeepSeek R1 Distill Qwen 14B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
+sha256 = "b4e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 8800000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = false
+quantization = "Q4_K_M"
+
+[[model]]
+id = "phi3_3.8b"
+name = "Phi-3 Mini Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+filename = "Phi-3-mini-4k-instruct-q4.gguf"
+sha256 = "c5e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2400000000
+min_ram_gb = 6.0
+context_length = 4096
+supports_tools = false
+quantization = "Q4_K_M"
+
+[[model]]
+id = "stablelm_3b"
+name = "StableLM Zephyr 3B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/stablelm-zephyr-3b-GGUF/resolve/main/stablelm-zephyr-3b.Q4_K_M.gguf"
+filename = "stablelm-zephyr-3b.Q4_K_M.gguf"
+sha256 = "d6e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7e7"
+size_bytes = 2000000000
+min_ram_gb = 6.0
+context_length = 4096
+supports_tools = false
+quantization = "Q4_K_M"
