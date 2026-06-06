@@ -37,9 +37,13 @@ impl ToolExecutor {
                     .unwrap_or_else(|| ctx.paths.workspace_dir());
                 FileOps::search(&search_path, pattern)
             }
-            Action::DeleteFile { path } => {
+            Action::DeleteFile { path, pattern } => {
                 let expanded = ctx.paths.resolve_workspace_path(path);
-                FileOps::delete(&expanded)
+                if let Some(pat) = pattern {
+                    FileOps::delete_matching(&expanded, pat)
+                } else {
+                    FileOps::delete(&expanded)
+                }
             }
             Action::CopyFile { source, destination } => {
                 let src = ctx.paths.resolve_workspace_path(source);

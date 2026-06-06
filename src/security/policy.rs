@@ -88,7 +88,7 @@ impl PolicyEngine {
                 }
                 PolicyResult::Ask
             }
-            Action::DeleteFile { path } => {
+            Action::DeleteFile { path, .. } => {
                 let p = paths.resolve_workspace_path(path);
                 if paths.is_within_workspace(&p) {
                     PolicyResult::Ask

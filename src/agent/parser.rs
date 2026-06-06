@@ -58,11 +58,14 @@ impl ToolParser {
             return Ok(action);
         }
 
-        // Phase 5: If all parsing fails, return a structured error action
-        anyhow::bail!(
-            "Failed to parse model output as action. Output was:\n{}",
-            text.chars().take(500).collect::<String>()
+        // Phase 5: If all parsing fails, treat the text as a Finish action
+        warn!(
+            "No structured action found; treating as Finish output: {}",
+            text.chars().take(200).collect::<String>()
         );
+        return Ok(Action::Finish {
+            output: Some(text.trim().to_string()),
+        });
     }
 
     /// Extract JSON from outermost `{...}` using brace matching.
@@ -148,6 +151,38 @@ impl ToolParser {
                 pattern: pat.trim().to_string(),
                 path: None,
                 search_type: None,
+            });
+        }
+
+        // Pattern: "delete file: path"
+        if let Some(path) = self.extract_after_prefix(&lower, &["delete file:", "remove file:", "delete:", "remove:"]) {
+            return Some(Action::DeleteFile {
+                path: path.trim().to_string(),
+                pattern: None,
+            });
+        }
+
+        // Pattern: "copy file: source -> destination"
+        if let Some(rest) = self.extract_after_prefix(&lower, &["copy file:", "copy:"]) {
+            if let Some((src, dst)) = rest.split_once("->").or_else(|| rest.split_once(" to ")) {
+                return Some(Action::CopyFile {
+                    source: src.trim().to_string(),
+                    destination: dst.trim().to_string(),
+                });
+            }
+        }
+
+        // Pattern: "create directory: path"
+        if let Some(path) = self.extract_after_prefix(&lower, &["create directory:", "mkdir:", "create dir:"]) {
+            return Some(Action::CreateDirectory {
+                path: path.trim().to_string(),
+            });
+        }
+
+        // Pattern: "file metadata: path"
+        if let Some(path) = self.extract_after_prefix(&lower, &["file metadata:", "metadata:", "stat:", "file info:"]) {
+            return Some(Action::FileMetadata {
+                path: path.trim().to_string(),
             });
         }
 

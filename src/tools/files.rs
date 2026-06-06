@@ -190,6 +190,44 @@ impl FileOps {
         Ok(format!("Deleted: {}", path.display()))
     }
 
+    /// Delete all files matching a glob pattern in the given directory.
+    pub fn delete_matching(dir: &Path, pattern: &str) -> Result<String> {
+        if !dir.is_dir() {
+            anyhow::bail!("'{}' is not a directory", dir.display());
+        }
+        let mut deleted = Vec::new();
+        let walker = walkdir(dir, true);
+        for entry in walker {
+            if let Ok(entry) = entry {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().to_string();
+                if glob_match(&name, pattern) {
+                    match std::fs::remove_file(entry.path()) {
+                        Ok(_) => {
+                            let path = entry.path();
+                            let relative = path.strip_prefix(dir).unwrap_or(&path);
+                            deleted.push(relative.display().to_string());
+                        }
+                        Err(e) => {
+                            deleted.push(format!("{} (error: {})", entry.path().display(), e));
+                        }
+                    }
+                }
+            }
+        }
+        if deleted.is_empty() {
+            Ok(format!("No files matching '{}' found in {}", pattern, dir.display()))
+        } else {
+            let mut output = format!("Deleted {} file(s) matching '{}':\n", deleted.len(), pattern);
+            for f in &deleted {
+                output.push_str(&format!("  - {}\n", f));
+            }
+            Ok(output)
+        }
+    }
+
     /// Copy a file.
     pub fn copy(src: &Path, dst: &Path) -> Result<String> {
         if let Some(parent) = dst.parent() {

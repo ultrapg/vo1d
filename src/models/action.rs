@@ -42,9 +42,12 @@ pub enum Action {
         #[serde(rename = "type")]
         search_type: Option<String>,
     },
-    #[serde(rename = "delete_file")]
+    #[serde(rename = "delete_file", alias = "delete_files")]
     DeleteFile {
+        #[serde(default = "default_dot")]
         path: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pattern: Option<String>,
     },
     #[serde(rename = "copy_file")]
     CopyFile {
@@ -80,6 +83,10 @@ pub enum Action {
     },
 }
 
+fn default_dot() -> String {
+    ".".to_string()
+}
+
 impl Action {
     /// Returns a human-readable description of this action.
     pub fn description(&self) -> String {
@@ -89,7 +96,13 @@ impl Action {
             Action::ExecuteCommand { command, .. } => format!("Execute: {}", command),
             Action::ListDirectory { path, .. } => format!("List directory: {}", path),
             Action::SearchFiles { pattern, .. } => format!("Search: {}", pattern),
-            Action::DeleteFile { path } => format!("Delete file: {}", path),
+            Action::DeleteFile { path, pattern } => {
+                if let Some(pat) = pattern {
+                    format!("Delete files matching '{}' in {}", pat, path)
+                } else {
+                    format!("Delete file: {}", path)
+                }
+            }
             Action::CopyFile { source, destination } => format!("Copy {} to {}", source, destination),
             Action::CreateDirectory { path } => format!("Create directory: {}", path),
             Action::FileMetadata { path } => format!("Metadata: {}", path),
@@ -141,8 +154,14 @@ mod tests {
 
     #[test]
     fn test_action_description_delete_file() {
-        let a = Action::DeleteFile { path: "old.txt".to_string() };
+        let a = Action::DeleteFile { path: "old.txt".to_string(), pattern: None };
         assert_eq!(a.description(), "Delete file: old.txt");
+    }
+
+    #[test]
+    fn test_action_description_delete_files_pattern() {
+        let a = Action::DeleteFile { path: ".".to_string(), pattern: Some("*.txt".to_string()) };
+        assert_eq!(a.description(), "Delete files matching '*.txt' in .");
     }
 
     #[test]
@@ -183,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_action_is_destructive() {
-        assert!(Action::DeleteFile { path: "x".to_string() }.is_destructive());
+        assert!(Action::DeleteFile { path: "x".to_string(), pattern: None }.is_destructive());
         assert!(Action::WriteFile { path: "x".to_string(), content: "".to_string(), append: None }.is_destructive());
         assert!(!Action::ReadFile { path: "x".to_string(), start_line: None, end_line: None }.is_destructive());
         assert!(!Action::ExecuteCommand { command: "ls".to_string(), timeout: None, workdir: None }.is_destructive());

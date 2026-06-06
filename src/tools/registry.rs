@@ -110,6 +110,71 @@ impl ToolRegistry {
             }),
         });
 
+        tools.insert("delete_file".to_string(), ToolInfo {
+            name: "delete_file",
+            description: "Delete a file or files matching a glob pattern. Set 'pattern' to delete multiple files (e.g. '*.txt').",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Path to the file (or directory when pattern is set)" },
+                    "pattern": { "type": "string", "description": "Glob pattern to match files for batch delete (e.g. '*.txt')" }
+                },
+                "required": ["path"]
+            }),
+        });
+
+        tools.insert("copy_file".to_string(), ToolInfo {
+            name: "copy_file",
+            description: "Copy a file from source to destination. Creates parent directories if needed.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "source": { "type": "string", "description": "Source file path" },
+                    "destination": { "type": "string", "description": "Destination file path" }
+                },
+                "required": ["source", "destination"]
+            }),
+        });
+
+        tools.insert("create_directory".to_string(), ToolInfo {
+            name: "create_directory",
+            description: "Create a directory and all parent directories.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Directory path to create" }
+                },
+                "required": ["path"]
+            }),
+        });
+
+        tools.insert("http_request".to_string(), ToolInfo {
+            name: "http_request",
+            description: "Make an HTTP request to a URL.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "url": { "type": "string", "description": "Request URL" },
+                    "method": { "type": "string", "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"], "description": "HTTP method" },
+                    "headers": { "type": "object", "description": "Request headers" },
+                    "body": { "type": "string", "description": "Request body" }
+                },
+                "required": ["url"]
+            }),
+        });
+
+        tools.insert("ask_user".to_string(), ToolInfo {
+            name: "ask_user",
+            description: "Ask the user a question and wait for their response.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "question": { "type": "string", "description": "Question to ask the user" }
+                },
+                "required": ["question"]
+            }),
+        });
+
         Self { tools }
     }
 

@@ -132,7 +132,7 @@ impl BuiltinBackend {
 
         let tokens = handle
             .model
-            .str_to_token(prompt, AddBos::Always)
+            .str_to_token(prompt, AddBos::Never)
             .map_err(|e| anyhow::anyhow!("Tokenize: {:?}", e))?;
 
         let n_prompt = tokens.len() as u32;
@@ -266,9 +266,7 @@ impl BuiltinBackend {
                 if let Err(e) = Self::generate_blocking(handle, &config, &prompt, Some(&tx)) {
                     let _ = tx.blocking_send(Err(format!("Generation failed: {}", e).into()));
                 }
-            })
-            .await
-            .ok();
+            });
         }
     }
 }
@@ -336,16 +334,16 @@ fn build_chat_prompt(messages: &[Message], max_context: usize) -> String {
 
     for msg in messages {
         let role = match msg.role.as_str() {
-            "system" => "System",
-            "user" => "User",
-            "assistant" => "Assistant",
-            "tool" => "Tool",
-            _ => "User",
+            "system" => "system",
+            "user" => "user",
+            "assistant" => "assistant",
+            "tool" => "tool",
+            _ => "user",
         };
-        parts.push(format!("<|{}|>\n{}", role, msg.content));
+        parts.push(format!("<|im_start|>{}\n{}<|im_end|>", role, msg.content));
     }
 
-    parts.push("<|Assistant|>\n".to_string());
+    parts.push("<|im_start|>assistant\n".to_string());
 
     let full = parts.join("\n");
 
