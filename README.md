@@ -15,7 +15,6 @@
 - **Interactive REPL** — Chat-like interface for iterative task execution
 - **Session management** — Save, resume, and checkpoint long-running tasks
 - **Fully portable** — All data stored relative to the executable; runs from any folder
-- **TUI mode** — Terminal UI with three-panel layout (Plan, Conversation, System)
 
 ---
 
@@ -59,10 +58,7 @@ vo1d/
 │   │   ├── settings.rs     # Settings structs with serde defaults
 │   │   └── mod.rs          # Load/save settings.toml
 │   ├── ui/                 # User interfaces
-│   │   ├── cli.rs          # CLI REPL and output helpers
-│   │   ├── draw.rs         # TUI rendering (ratatui)
-│   │   ├── tui.rs          # TUI event loop
-│   │   └── widgets.rs      # TUI state structs
+│   │   └── cli.rs          # CLI REPL and output helpers
 │   ├── models/             # Data models
 │   │   ├── message.rs      # Message, LlmResponse, TokenUsage
 │   │   ├── action.rs       # Action enum (all tool actions)
@@ -99,7 +95,7 @@ cargo build --features llamacpp-builtin --release
 # Or with Vulkan GPU acceleration
 cargo build --features vulkan --release
 
-# Or with all features (Ollama, LM Studio, TUI, etc.)
+# Or with all features (Ollama, LM Studio, etc.)
 cargo build --features full --release
 ```
 
@@ -114,8 +110,7 @@ cargo build --features full --release
 | `lmstudio` | LM Studio API backend |
 | `llamacpp-server` | llama.cpp server backend |
 | `custom-api` | Custom OpenAI-compatible API backend |
-| `tui` | Terminal UI via ratatui + crossterm |
-| `full` | All of the above |
+| `full` | All backends |
 
 ### Install a Model
 
@@ -151,9 +146,6 @@ vo1d task "search for todos in the codebase" --debug
 
 # Resume a previous session
 vo1d --resume <session-id>
-
-# Launch with TUI (if built with --features tui or --features full)
-vo1d
 ```
 
 ---
@@ -396,42 +388,6 @@ Each audit entry includes:
 
 ---
 
-## Terminal UI (TUI)
-
-When built with `--features tui` and launched without a subcommand, vo1d opens a three-panel TUI:
-
-```
-┌─ Status Bar ──────────────────────────────────────────────────────┐
-│ VO1D | Mode: Interactive | Model: qwen25_1.5b | RAM: 5.6G/7.9G    │
-├──────────────┬──────────────────────────────┬──────────────────────┤
-│ Plan/Session │ Conversation                 │ System               │
-│              │                              │                      │
-│ Goal: ...    │ [system] VO1D initialized    │ RAM: 5.6 / 7.9 GB   │
-│ Session: id  │ [user] hello                 │ CPU cores: 4         │
-│ Processing   │ [assistant] Hello! How can   │ Workspace: ...       │
-│              │ I help you today?            │                      │
-│              │                              │ System ready.        │
-├──────────────┴──────────────────────────────┴──────────────────────┤
-│ Interactive >> _                                                   │
-└────────────────────────────────────────────────────────────────────┘
-```
-
-### TUI Keybindings
-
-| Key | Action |
-|-----|--------|
-| `Tab` | Cycle focus through panels |
-| `Shift+Tab` | Reverse cycle focus |
-| `Up/Down` | Scroll focused panel |
-| `PgUp/PgDn` | Scroll 10 lines |
-| `Home` | Scroll to top |
-| `End` | Scroll to bottom |
-| `Space` | Focus input bar |
-| `Esc` | Quit |
-| `Enter` | Submit task |
-
----
-
 ## CLI Reference
 
 ```
@@ -502,7 +458,7 @@ The profiler checks:
 
 ```
                         ┌──────────────┐
-                        │    CLI/TUI   │
+                        │     CLI      │
                         └──────┬───────┘
                                │
                         ┌──────▼───────┐
@@ -523,7 +479,7 @@ The profiler checks:
 
 ### Component Details
 
-- **CLI/TUI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or TUI.
+- **CLI**: Entry point. Clap argument parser dispatches to `vo1d task` or `vo1d chat`.
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry. Cloned per task.
 - **Agent Loop**: Iterates up to `max_iterations`. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended to conversation.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Current implementations: `builtin` (llama.cpp via `llama-cpp-2`). Backends are pluggable.
@@ -576,10 +532,8 @@ cargo test --features llamacpp-builtin
 | `llama_context: n_batch = 512` then crash | Delete `<exe-dir>/config/settings.toml` or set `batch_size = 4096` |
 | `Model file not found` | Run `vo1d models install <model-id>` |
 | `Failed to load model at startup` | The model file is missing or corrupt. Reinstall with `vo1d models install <model-id>` |
-| TUI shows garbled output | Ensure you built with `--features full` (includes `tui`). The llama.cpp diagnostic output is suppressed. |
 | `spawn_blocking panicked` in `builtin.rs` | Usually a model crash. Check RAM usage and reduce `context_size` or `gpu_layers` |
 | Build fails with linker errors on Windows | You need MSVC build tools (Visual Studio Build Tools or Visual Studio). The `+crt-static` flag must NOT be in `.cargo/config.toml` |
-| Can't type in TUI | Press `Tab` to focus the input bar if it's not already focused. The cursor should appear after the `>>` prompt. |
 
 ---
 
