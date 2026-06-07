@@ -141,6 +141,7 @@ impl Vo1dPaths {
             self.tools_dir(),
             self.plugins_dir(),
             self.memory_dir(),
+            self.curriculum_dir(),
         ];
 
         for dir in &dirs {

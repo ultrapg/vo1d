@@ -6,7 +6,7 @@ use std::path::Path;
 use std::time::Instant;
 
 /// Runs the agent on a curriculum of training tasks.
-pub async fn run_curriculum(ctx: AppContext, curriculum_path: &str) -> Result<()> {
+pub async fn run_curriculum(ctx: AppContext, curriculum_path: &str, manual: bool) -> Result<()> {
     let curriculum = Curriculum::load(curriculum_path)?;
     let curriculum_name = curriculum.name.clone();
     let total = curriculum.task_count();
@@ -16,13 +16,17 @@ pub async fn run_curriculum(ctx: AppContext, curriculum_path: &str) -> Result<()
     println!("Total tasks: {}\n", total);
 
     let sandbox = ctx.paths.workspace_dir().join("train_sandbox");
-    let results = run_all_tasks(ctx, &curriculum, &sandbox).await?;
+    let results = if manual {
+        run_all_tasks_manual(&curriculum, &sandbox).await?
+    } else {
+        run_all_tasks(ctx, &curriculum, &sandbox).await?
+    };
 
     print_summary(&curriculum, &results);
     Ok(())
 }
 
-/// Run all tasks in a curriculum sequentially.
+/// Run all tasks via the agent loop.
 async fn run_all_tasks(ctx: AppContext, curriculum: &Curriculum, sandbox: &Path) -> Result<Vec<EvaluationResult>> {
     let mut results = Vec::new();
 
@@ -30,28 +34,12 @@ async fn run_all_tasks(ctx: AppContext, curriculum: &Curriculum, sandbox: &Path)
         println!("─── Task {}/{}: {} ───", i + 1, curriculum.task_count(), task.id);
         println!("  {}", task.description);
 
-        // Clean sandbox before each task
         let _ = std::fs::remove_dir_all(sandbox);
         std::fs::create_dir_all(sandbox)?;
 
         let result = run_single_task(&ctx, task, sandbox).await?;
 
-        results.push(result.clone());
-
-        // Store outcome in memory
-        if let Ok(mut mem) = ctx.memory.lock() {
-            mem.add_task(
-                &task.id,
-                vec![format!("train:{}", task.description)],
-                &result.outcome,
-            );
-            if result.passed {
-                mem.add_pattern(
-                    &format!("task:{}", task.id),
-                    &format!("Completed: {}", task.expected_outcome),
-                );
-            }
-        }
+        store_in_memory(&ctx, task, &result);
 
         if result.passed {
             println!("  ✓ PASSED");
@@ -62,14 +50,65 @@ async fn run_all_tasks(ctx: AppContext, curriculum: &Curriculum, sandbox: &Path)
             }
         }
         println!();
+        results.push(result);
     }
 
     Ok(results)
 }
 
-/// Run the agent on a single training task, then evaluate.
+/// Run all tasks in manual mode (user completes tasks, model is not required).
+async fn run_all_tasks_manual(curriculum: &Curriculum, sandbox: &Path) -> Result<Vec<EvaluationResult>> {
+    let mut results = Vec::new();
+
+    for (i, task) in curriculum.tasks.iter().enumerate() {
+        println!("─── Task {}/{}: {} ───", i + 1, curriculum.task_count(), task.id);
+        println!("  {}", task.description);
+        println!();
+        println!("  Expected outcome: {}", task.expected_outcome);
+        println!();
+        println!("  Work inside the sandbox directory:");
+        println!("    {}", sandbox.display());
+        println!();
+        println!("  Press Enter when done, or type 'skip' to skip this task.");
+        println!();
+
+        let _ = std::fs::remove_dir_all(sandbox);
+        std::fs::create_dir_all(sandbox)?;
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let input = input.trim();
+
+        if input.eq_ignore_ascii_case("skip") {
+            results.push(EvaluationResult {
+                task_id: task.id.clone(),
+                passed: false,
+                details: vec!["Skipped by user".to_string()],
+                outcome: "skipped".to_string(),
+            });
+            println!("  ⏭ SKIPPED\n");
+            continue;
+        }
+
+        let evaluation = evaluate_task(task, sandbox);
+
+        if evaluation.passed {
+            println!("  ✓ PASSED\n");
+        } else {
+            println!("  ✗ FAILED");
+            for detail in &evaluation.details {
+                println!("    {}", detail);
+            }
+            println!();
+        }
+
+        results.push(evaluation);
+    }
+
+    Ok(results)
+}
+
 async fn run_single_task(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, sandbox: &Path) -> Result<EvaluationResult> {
-    // Set up the task description to guide the agent
     let prompt = format!(
         r#"Training exercise: {}
 
@@ -86,16 +125,12 @@ Complete this task and then use "finish" to signal completion."#,
 
     let start = Instant::now();
 
-    // Run agent loop
     let session = Session::new(&prompt, ctx)?;
     let result = crate::agent::loop_::agent_loop(ctx.clone(), session).await?;
 
     let elapsed = start.elapsed();
-
-    // Evaluate task completion
     let evaluation = evaluate_task(task, sandbox);
 
-    // Log to memory
     let actions_taken: Vec<String> = result.variables.get("action_count")
         .map(|c| vec![format!("{} actions in {:?}", c, elapsed)])
         .unwrap_or_default();
@@ -111,7 +146,22 @@ Complete this task and then use "finish" to signal completion."#,
     Ok(evaluation)
 }
 
-/// Print a summary of all training results.
+fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, result: &EvaluationResult) {
+    if let Ok(mut mem) = ctx.memory.lock() {
+        mem.add_task(
+            &task.id,
+            vec![format!("train:{}", task.description)],
+            &result.outcome,
+        );
+        if result.passed {
+            mem.add_pattern(
+                &format!("task:{}", task.id),
+                &format!("Completed: {}", task.expected_outcome),
+            );
+        }
+    }
+}
+
 fn print_summary(curriculum: &Curriculum, results: &[EvaluationResult]) {
     let passed = results.iter().filter(|r| r.passed).count();
     let total = results.len();

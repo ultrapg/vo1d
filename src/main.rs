@@ -76,7 +76,10 @@ enum Commands {
     /// Run training curriculum from JSON file
     Train {
         /// Path to curriculum JSON file (or built-in name like "00_hello_world")
-        curriculum: String,
+        curriculum: Option<String>,
+        /// Manual mode: complete tasks yourself without an LLM model
+        #[arg(long, default_value_t = false)]
+        manual: bool,
     },
     /// Edit or view configuration
     Config,
@@ -153,8 +156,11 @@ async fn main() -> Result<()> {
         Some(Commands::Sessions) => {
             run_sessions(ctx).await?;
         }
-        Some(Commands::Train { curriculum }) => {
-            run_train(ctx, &curriculum).await?;
+        Some(Commands::Train { curriculum, manual }) => {
+            match curriculum {
+                Some(name) => run_train(ctx, &name, manual).await?,
+                None => list_curricula(ctx).await?,
+            }
         }
         Some(Commands::Config) => {
             run_config(ctx).await?;
@@ -229,38 +235,103 @@ async fn run_models(ctx: AppContext, action: Option<ModelAction>) -> Result<()> 
     Ok(())
 }
 
-async fn run_train(ctx: AppContext, curriculum: &str) -> Result<()> {
-    // Resolve curriculum path: check if it's a built-in name first
-    let curriculum_path = if !curriculum.contains('\\') && !curriculum.contains('/') && !curriculum.contains('.') {
-        let builtin = ctx.paths.curriculum_dir().join(format!("{}.json", curriculum));
-        if builtin.exists() {
-            builtin
-        } else {
-            // Try with leading digits prefix
-            let entries = std::fs::read_dir(ctx.paths.curriculum_dir())?;
-            let mut found = None;
-            for entry in entries {
-                let entry = entry?;
-                let name = entry.file_name().to_string_lossy().to_string();
-                if name.contains(curriculum) && name.ends_with(".json") {
-                    found = Some(entry.path());
-                    break;
-                }
-            }
-            match found {
-                Some(p) => p,
-                None => anyhow::bail!("Curriculum '{}' not found in {}", curriculum, ctx.paths.curriculum_dir().display()),
-            }
+async fn list_curricula(ctx: AppContext) -> Result<()> {
+    let curricula_dir = find_curriculum_dir(&ctx);
+    let dir = match curricula_dir {
+        Some(d) => d,
+        None => {
+            println!("No curriculum directory found.");
+            println!("Place .json curriculum files in a 'curriculum/' folder next to the executable or in the current directory.");
+            return Ok(());
         }
-    } else {
-        std::path::PathBuf::from(curriculum)
     };
 
-    if !curriculum_path.exists() {
-        anyhow::bail!("Curriculum file not found: {}", curriculum_path.display());
+    println!("Available curricula:");
+    let mut entries: Vec<_> = std::fs::read_dir(&dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map(|x| x == "json").unwrap_or(false))
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+
+    for entry in &entries {
+        let name = entry.file_name().to_string_lossy().to_string();
+        let display = name.strip_suffix(".json").unwrap_or(&name).to_string();
+        if let Ok(content) = std::fs::read_to_string(entry.path()) {
+            if let Ok(curriculum) = serde_json::from_str::<serde_json::Value>(&content) {
+                let desc = curriculum.get("description").and_then(|d| d.as_str()).unwrap_or("");
+                let task_count = curriculum.get("tasks").and_then(|t| t.as_array()).map(|a| a.len()).unwrap_or(0);
+                println!("  {}  {}  ({} tasks)", display, desc, task_count);
+            } else {
+                println!("  {}  (invalid JSON)", display);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn find_curriculum_dir(ctx: &AppContext) -> Option<std::path::PathBuf> {
+    let candidates: Vec<std::path::PathBuf> = {
+        let mut v = Vec::new();
+        // 1. Exe-relative curriculum dir
+        v.push(ctx.paths.curriculum_dir());
+        // 2. Current working directory
+        if let Ok(cwd) = std::env::current_dir() {
+            v.push(cwd.join("curriculum"));
+        }
+        // 3. Parent of exe dir (common when running from target/release)
+        if let Some(p) = ctx.paths.curriculum_dir().parent().and_then(|p| p.parent()) {
+            v.push(p.join("curriculum"));
+        }
+        v
+    };
+
+    for dir in &candidates {
+        if dir.exists() {
+            // Only return if it has .json files
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                let has_json = entries.flatten().any(|e| {
+                    e.path().extension().map(|x| x == "json").unwrap_or(false)
+                });
+                if has_json {
+                    return Some(dir.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn resolve_curriculum_path(ctx: &AppContext, name: &str) -> Result<std::path::PathBuf> {
+    let curricula_dir = find_curriculum_dir(ctx)
+        .ok_or_else(|| anyhow::anyhow!("No curriculum directory found. Place .json curriculum files in a 'curriculum/' folder next to the executable or in the current directory."))?;
+
+    // Direct file path
+    let path = std::path::PathBuf::from(name);
+    if path.is_file() {
+        return Ok(path);
     }
 
-    vo1d::agent::train::run_curriculum(ctx, &curriculum_path.to_string_lossy()).await?;
+    // Exact match
+    let exact = curricula_dir.join(format!("{}.json", name));
+    if exact.exists() {
+        return Ok(exact);
+    }
+
+    // Fuzzy match: search for files containing the name
+    let entries = std::fs::read_dir(&curricula_dir)?;
+    for entry in entries.flatten() {
+        let fname = entry.file_name().to_string_lossy().to_string();
+        if fname.contains(name) && fname.ends_with(".json") {
+            return Ok(entry.path());
+        }
+    }
+
+    anyhow::bail!("Curriculum '{}' not found in {}", name, curricula_dir.display())
+}
+
+async fn run_train(ctx: AppContext, curriculum: &str, manual: bool) -> Result<()> {
+    let curriculum_path = resolve_curriculum_path(&ctx, curriculum)?;
+    vo1d::agent::train::run_curriculum(ctx, &curriculum_path.to_string_lossy(), manual).await?;
     Ok(())
 }
 
