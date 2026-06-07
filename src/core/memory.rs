@@ -173,16 +173,10 @@ impl MemoryStore {
         let tags = Self::extract_tags(task_description);
         let id = Self::next_id("sol");
 
-        let action_str = if actions_taken.is_empty() {
-            String::new()
-        } else {
-            format!(" | Actions: [{}]", actions_taken.join(", "))
-        };
-
         // Deduplicate: if same task exists, update it
         if let Some(existing) = self.solutions.iter_mut().find(|s| s.task_description == task_description) {
             existing.success_count += 1;
-            existing.solution = format!("{}{}", solution, action_str);
+            existing.solution = solution.to_string();
             existing.outcome = outcome.to_string();
             existing.timestamp = chrono::Utc::now().to_rfc3339();
             if !actions_taken.is_empty() {
@@ -193,7 +187,7 @@ impl MemoryStore {
                 id,
                 task_description: task_description.to_string(),
                 tags,
-                solution: format!("{}{}", solution, action_str),
+                solution: solution.to_string(),
                 outcome: outcome.to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 success_count: 1,
@@ -212,17 +206,11 @@ impl MemoryStore {
         let tags = Self::extract_tags(task_description);
         let id = Self::next_id("mist");
 
-        let action_str = if !actions_taken.is_empty() {
-            format!(" | Actions: [{}]", actions_taken.join(", "))
-        } else {
-            String::new()
-        };
-
         if let Some(existing) = self.mistakes.iter_mut().find(|m| m.mistake == mistake) {
             existing.frequency += 1;
             existing.timestamp = chrono::Utc::now().to_rfc3339();
             if !actions_taken.is_empty() {
-                existing.lesson = format!("{} (actions that failed: {})", lesson, actions_taken.join(", "));
+                existing.lesson = lesson.to_string();
                 existing.actions = actions_taken.to_vec();
             }
         } else {
@@ -230,7 +218,7 @@ impl MemoryStore {
                 id,
                 task_description: task_description.to_string(),
                 tags,
-                mistake: format!("{}{}", mistake, action_str),
+                mistake: mistake.to_string(),
                 lesson: lesson.to_string(),
                 how_to_avoid: how_to_avoid.to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
@@ -442,14 +430,28 @@ impl MemoryStore {
 
         if !similar.solutions.is_empty() {
             let sol_texts: Vec<String> = similar.solutions.iter()
-                .map(|s| format!("  [past solution] {} → {}", s.task_description, s.solution))
+                .map(|s| {
+                    let actions_note = if s.actions.is_empty() {
+                        String::new()
+                    } else {
+                        format!("\n    Actions taken: {}", s.actions.join(" → "))
+                    };
+                    format!("  [past solution] {} → {}{}", s.task_description, s.solution, actions_note)
+                })
                 .collect();
             recall_parts.push(format!("SIMILAR PAST SOLUTIONS:\n{}", sol_texts.join("\n")));
         }
 
         if !similar.mistakes.is_empty() {
             let mist_texts: Vec<String> = similar.mistakes.iter()
-                .map(|m| format!("  [past mistake] {} → Lesson: {} | Avoid: {}", m.mistake, m.lesson, m.how_to_avoid))
+                .map(|m| {
+                    let actions_note = if m.actions.is_empty() {
+                        String::new()
+                    } else {
+                        format!("\n    Actions that led to mistake: {}", m.actions.join(" → "))
+                    };
+                    format!("  [past mistake] {} → Lesson: {} | Avoid: {}{}", m.mistake, m.lesson, m.how_to_avoid, actions_note)
+                })
                 .collect();
             recall_parts.push(format!("RELEVANT MISTAKES FROM THE PAST:\n{}", mist_texts.join("\n")));
         }
@@ -462,17 +464,30 @@ impl MemoryStore {
         }
 
         // Plan template matching: find past solutions with PLAN.md-like step structures
-        let plan_templates: Vec<String> = self.solutions.iter()
-            .filter(|s| {
-                let combined = format!("{} {}", s.task_description, s.solution);
-                let lower = combined.to_lowercase();
-                (lower.contains("## step") || lower.contains("## plan") || lower.contains("plan.md"))
-                    && (lower.contains(&current_task.to_lowercase())
-                        || similar.solutions.iter().any(|sim| sim.id == s.id))
-            })
+        // Score by keyword overlap with current task
+        let task_lower = current_task.to_lowercase();
+        let task_words: Vec<&str> = task_lower.split_whitespace().filter(|w| w.len() > 2).collect();
+        let score_solution = |s: &SolutionRecord| -> f64 {
+            if !s.solution.to_lowercase().contains("## step") && !s.solution.to_lowercase().contains("## plan") {
+                return 0.0;
+            }
+            let combined = format!("{} {}", s.task_description, s.solution).to_lowercase();
+            let matches = task_words.iter().filter(|w| combined.contains(*w)).count();
+            let overlap = if task_words.is_empty() { 0.0 } else { matches as f64 / task_words.len() as f64 };
+            // Bonus if it was in similar results
+            let sim_bonus = if similar.solutions.iter().any(|sim| sim.id == s.id) { 0.3 } else { 0.0 };
+            overlap + sim_bonus
+        };
+
+        let mut scored_plans: Vec<(f64, &SolutionRecord)> = self.solutions.iter()
+            .map(|s| (score_solution(s), s))
+            .filter(|(score, _)| *score > 0.0)
+            .collect();
+        scored_plans.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+
+        let plan_templates: Vec<String> = scored_plans.iter()
             .take(2)
-            .map(|s| {
-                // Extract plan-like section from solution
+            .map(|(_, s)| {
                 let plan_section = if s.solution.contains("## Step") || s.solution.contains("## Plan") || s.solution.contains("PLAN.md") {
                     s.solution.clone()
                 } else {
@@ -481,7 +496,6 @@ impl MemoryStore {
                 if plan_section.is_empty() {
                     format!("  [{}] {} — review memory for plan details", s.id, s.task_description)
                 } else {
-                    // Truncate plan section to a reasonable size
                     let truncated = if plan_section.len() > 600 {
                         format!("{}...", &plan_section[..597])
                     } else {

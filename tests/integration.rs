@@ -207,6 +207,19 @@ fn test_doc_provider_specific_doc() {
     let si = dp.get("self-improvement").expect("self-improvement.md should be loadable");
     assert!(si.contains("Error"));
     assert!(si.contains("Memory"));
+
+    // Verify new mode documentation docs load
+    let planning = dp.get("planning").expect("planning.md should be loadable");
+    assert!(planning.contains("PLAN.md"));
+    assert!(planning.contains("## Step"));
+
+    let fix_mode = dp.get("fix-mode").expect("fix-mode.md should be loadable");
+    assert!(fix_mode.contains("Fix mode"));
+    assert!(fix_mode.contains("Read-Only Phase"));
+
+    let research_mode = dp.get("research-mode").expect("research-mode.md should be loadable");
+    assert!(research_mode.contains("Research mode"));
+    assert!(research_mode.contains("read-only"));
 }
 
 // ── 6. Action Enum Integration ──

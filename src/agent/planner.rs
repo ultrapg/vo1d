@@ -22,7 +22,7 @@ impl Planner {
     }
 
     /// Get the next step that is ready to execute (all deps satisfied).
-    pub fn next_ready_step(&self, plan: &Plan) -> Option<usize> {
+    pub fn next_ready_step(plan: &Plan) -> Option<usize> {
         plan.steps.iter().position(|step| {
             if step.status != StepStatus::Pending {
                 return false;
@@ -50,7 +50,7 @@ impl Planner {
     }
 
     /// Get steps that need to be retried.
-    pub fn retryable_steps(&self, plan: &Plan) -> Vec<usize> {
+    pub fn retryable_steps(plan: &Plan) -> Vec<usize> {
         plan.steps.iter().enumerate()
             .filter(|(_, step)| step.status == StepStatus::Failed && step.retry_count < 3)
             .map(|(i, _)| i)

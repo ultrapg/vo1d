@@ -7,7 +7,7 @@ use crate::core::self_correction::{ErrorClassifier, FailureTracker};
 use crate::AppContext;
 use crate::models::action::Action;
 use crate::models::message::Message;
-use crate::models::plan::Plan;
+use crate::models::plan::{Plan, StepStatus};
 use crate::security::policy::PolicyResult;
 use crate::tools::registry::ToolRegistry;
 use anyhow::{Context, Result};
@@ -17,6 +17,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
+/// TDD phase tracking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TddPhase {
+    Red,
+    Green,
+    Refactor,
+}
+
 /// The main ReAct agent loop.
 pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session> {
     let cancel = CancellationToken::new();
@@ -25,10 +33,17 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     let _planner = Planner::new(ctx.config.max_iterations);
     let mut failure_tracker = FailureTracker::new();
     let mut plan: Option<Plan> = None;
-    let current_step: usize = 0;
+    let mut current_step: usize = 0;
     let mut step_iterations: HashMap<u32, u32> = HashMap::new();
     let mut step_failures: HashMap<u32, u32> = HashMap::new();
-    let plan_checked = std::cell::Cell::new(false);
+    let mut plan_checked = false;
+    let mut plan_recovery_fired = false;
+
+    // Behavioral mode state
+    let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
+    let mut tdd_phase = TddPhase::Red;
+    let mut fix_hypothesis: Option<String> = None;
+    let mut tests_passed_before_write = false;
 
     let model_id = ctx.config.default_model.clone();
     let backend = ctx.model_registry.get(&model_id)
@@ -83,9 +98,33 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             crate::agent::checkpoint::save_checkpoint(&ctx, &session, iteration)?;
         }
 
+        // --- Plan state ---
+        let total_steps = plan.as_ref().map(|p| p.steps.len()).unwrap_or(0);
+        let plan_progress = if total_steps > 0 {
+            let done = plan.as_ref().map(|p| p.steps.iter().filter(|s| s.status == StepStatus::Completed).count()).unwrap_or(0);
+            let bar_width = 10;
+            let filled = (done * bar_width / total_steps).min(bar_width);
+            let empty = bar_width - filled;
+            format!(" [{}]{}/{} steps", format!("{}{}", "█".repeat(filled), "░".repeat(empty)), done, total_steps)
+        } else {
+            String::new()
+        };
+
         if !session.tui_mode {
-            let plan_info = plan.as_ref().map(|p| format!(" [Step {}/{}]", current_step + 1, p.steps.len())).unwrap_or_default();
-            eprintln!("─── Iteration {}/{} {} ───", iteration + 1, max_iters, plan_info);
+            let plan_info = plan.as_ref().map(|p| {
+                let step_desc = p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done");
+                format!(" [Step {}/{}: {}]", current_step + 1, p.steps.len(), step_desc)
+            }).unwrap_or_default();
+            eprintln!("─── Iteration {}/{} {} {} ───", iteration + 1, max_iters, plan_info, plan_progress);
+        }
+
+        // --- Requires-plan enforcement (iteration 1+) ---
+        if iteration >= 1 && behavior.requires_plan() && plan.is_none() && plan_checked {
+            conversation.push(Message::system(
+                "This mode requires a PLAN.md file. Create one before proceeding. \
+                 Write a PLAN.md in the workspace root with steps like:\n\
+                 ## Step 1: ...\n- [ ] ...\n**Action:** read_file\n\nThen continue."
+            ));
         }
 
         if iteration > 0 {
@@ -113,8 +152,16 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 String::new()
             };
 
+            // Per-step limit enforcement
+            let per_step_limit: u32 = if total_steps > 0 { (max_iters as u32 / total_steps as u32).max(5).min(20) } else { 20 };
+            let step_limit_note = if step_iter >= per_step_limit && plan.is_some() {
+                format!("\nYou have exceeded the iteration limit ({}) for this plan step. The step will be marked as failed. Move to the next step or replan.", per_step_limit)
+            } else {
+                String::new()
+            };
+
             let progress_msg = format!(
-                "[Progress: step {}/{}{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]{}",
+                "[Progress: step {}/{}{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]{}{}",
                 iteration + 1,
                 max_iters,
                 plan_context,
@@ -122,6 +169,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 prev_result,
                 session.base_task,
                 step_note,
+                step_limit_note,
             );
             conversation.push(Message::system(progress_msg));
         }
@@ -149,7 +197,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         let action = match tool_parser.parse(&response_text, supports_native_tools) {
             Ok(a) => a,
             Err(_e) => {
-                // Fallback to Finish if no action found
                 tracing::warn!("No structured action found; treating as Finish output: {}",
                     response_text.chars().take(100).collect::<String>());
                 Action::Finish { output: Some(response_text.clone()) }
@@ -159,7 +206,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         // Check for conversational response (no tool intent)
         if is_conversational(&response_text) {
             if iteration == 0 {
-                // First iteration: treat as completion
                 session.status = crate::agent::session::SessionStatus::Completed;
                 session.final_output = Some(response_text.clone());
                 if let Ok(mut mem) = ctx.memory.lock() {
@@ -167,7 +213,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 }
                 break;
             } else {
-                // Mid-task: nudge the model
                 conversation.push(Message::system(
                     "You responded without a tool action. If the task is not done, output a tool action now. If it is done, call finish."
                 ));
@@ -182,8 +227,14 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             if !session.tui_mode {
                 println!("\n[REASONING]\n{}\n", clean_reasoning);
             }
+            // Extract hypothesis from reasoning for Fix mode
+            if behavior == crate::core::behavior::BehaviorMode::Fix {
+                if reasoning.len() > 20 {
+                    let hyp = reasoning.chars().take(300).collect::<String>();
+                    fix_hypothesis = Some(hyp);
+                }
+            }
         } else if iteration > 0 {
-            // Reasoning reminder after first iteration
             conversation.push(Message::system(
                 "REMINDER: You MUST explain your reasoning in natural language before each JSON action. Start with 'I need to...' or 'The previous result shows...' and explain what you'll do next."
             ));
@@ -202,7 +253,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         if action_history.len() > 50 {
             action_history.remove(0);
         }
-        // Store action history on session for memory recall
         session.variables.insert("action_history".to_string(), serde_json::to_string(&action_history).unwrap_or_default());
         let repeat_count = action_history.iter()
             .rev()
@@ -227,7 +277,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         // Behavioral mode: read-only phase enforcement
-        let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
         let read_only_until = behavior.read_only_iters();
         if iteration < read_only_until && !matches!(&action, Action::Finish { .. }) {
             let is_write = matches!(&action,
@@ -245,6 +294,55 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 session.variables.insert("last_action".to_string(), action_type.to_string());
                 session.variables.insert("last_result".to_string(), "Blocked by read-only phase".to_string());
                 continue;
+            }
+        }
+
+        // --- Refactor mode: enforce test run before first write ---
+        if behavior == crate::core::behavior::BehaviorMode::Refactor && !tests_passed_before_write {
+            if matches!(&action, Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }) {
+                let test_msg = "REFACTOR MODE: You must run the existing tests BEFORE making any changes. \
+                                Execute the test command first, verify tests pass, then proceed with changes.";
+                conversation.push(Message::system(test_msg));
+                session.variables.insert("last_action".to_string(), action_type.to_string());
+                session.variables.insert("last_result".to_string(), "Blocked: run tests first".to_string());
+                continue;
+            }
+            if matches!(&action, Action::ExecuteCommand { .. }) {
+                // Assume any command might be a test — clear the gate after one execution
+                tests_passed_before_write = true;
+            }
+        }
+
+        // --- TDD phase enforcement ---
+        if behavior == crate::core::behavior::BehaviorMode::Tdd {
+            match tdd_phase {
+                TddPhase::Red => {
+                    // Red phase: only allow writing test files, reading, running tests
+                    let is_test_write = matches!(&action, Action::WriteFile { path, .. } if path.contains("test") || path.ends_with("_test.rs") || path.ends_with(".spec.ts"));
+                    let _is_read_or_command = matches!(&action, Action::ReadFile { .. } | Action::ExecuteCommand { .. } | Action::ListDirectory { .. } | Action::SearchFiles { .. });
+                    if matches!(&action, Action::WriteFile { .. }) && !is_test_write {
+                        let tdd_msg = "TDD RED PHASE: You must write a FAILING TEST first. \
+                                        Only create test files now. Implementation code goes in the GREEN phase.";
+                        conversation.push(Message::system(tdd_msg));
+                        session.variables.insert("last_action".to_string(), action_type.to_string());
+                        session.variables.insert("last_result".to_string(), "Blocked: write test first".to_string());
+                        continue;
+                    }
+                    // Check if test was written and run — heuristic: look for test write then command execute
+                    if is_test_write {
+                        tdd_phase = TddPhase::Green;
+                    }
+                }
+                TddPhase::Green => {
+                    // Green phase: write minimal code to pass tests
+                    if matches!(&action, Action::Finish { .. }) {
+                        let tdd_msg = "TDD GREEN PHASE: The test exists. Write minimal implementation code to make it pass before finishing.";
+                        conversation.push(Message::system(tdd_msg));
+                    }
+                }
+                TddPhase::Refactor => {
+                    // Refactor phase: already tracked separately
+                }
             }
         }
 
@@ -282,6 +380,20 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             }
         }
 
+        // --- PlanStep action enforcement (soft guidance) ---
+        if let Some(ref p) = plan {
+            if let Some(step) = p.steps.get(current_step) {
+                if step.action != "execute_command" && action_type != step.action && step.status == StepStatus::Pending {
+                    let guidance = format!(
+                        "NOTE: The current plan step '{}' suggests action '{}', but you used '{}'. \
+                         This is not a block, but try to align with the plan's suggested action if possible.",
+                        step.description, step.action, action_type
+                    );
+                    conversation.push(Message::system(guidance));
+                }
+            }
+        }
+
         // Execute the action
         match ToolExecutor::execute(&action, &ctx, &tool_registry).await {
             Ok(output) => {
@@ -303,6 +415,60 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
                 // Clear failure tracking on success
                 failure_tracker.clear(action_type);
+
+                // --- Plan step completion detection ---
+                if let Some(ref mut p) = plan {
+                    if let Some(step) = p.steps.get(current_step) {
+                        // Check if step action matches or is generic
+                        let action_matches = step.action == "execute_command" || action_type == step.action;
+                        if action_matches && step.status != StepStatus::Completed {
+                            Planner::complete_step(p, current_step, format!("{} succeeded", action_type));
+
+                            // If this was a WriteFile to a test file in TDD mode, advance phase
+                            if behavior == crate::core::behavior::BehaviorMode::Tdd {
+                                if action_type == "write_file" && tdd_phase == TddPhase::Red {
+                                    tdd_phase = TddPhase::Green;
+                                } else if action_type == "write_file" && tdd_phase == TddPhase::Green {
+                                    tdd_phase = TddPhase::Refactor;
+                                } else if action_type == "execute_command" && tdd_phase == TddPhase::Green {
+                                    tdd_phase = TddPhase::Refactor;
+                                }
+                            }
+
+                            // If Refactor mode test succeeded, allow writes
+                            if behavior == crate::core::behavior::BehaviorMode::Refactor && action_type == "execute_command" {
+                                let output_lower = output.to_lowercase();
+                                if !output_lower.contains("fail") && !output_lower.contains("error") {
+                                    tests_passed_before_write = true;
+                                }
+                            }
+
+                            // Advance to next ready step
+                            let next = Planner::next_ready_step(p);
+                            match next {
+                                Some(idx) => {
+                                    current_step = idx;
+                                    step_iterations.insert(idx as u32, 0);
+                                    step_failures.insert(idx as u32, 0);
+                                    if !session.tui_mode {
+                                        eprintln!("── [Plan step {}/{} complete. Moving to step {}: {}] ──",
+                                            current_step, p.steps.len(), current_step + 1,
+                                            p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done"));
+                                    }
+                                }
+                                None => {
+                                    // All steps done!
+                                    if p.steps.iter().all(|s| s.status == StepStatus::Completed) {
+                                        if !session.tui_mode {
+                                            eprintln!("── [All plan steps complete!] ──");
+                                        }
+                                        current_step = p.steps.len(); // past-the-end sentinel
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             Err(e) => {
                 if !session.tui_mode {
@@ -337,6 +503,19 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                             &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
                             &action_history,
                         );
+
+                        // Fix mode: include hypothesis in mistake record
+                        if behavior == crate::core::behavior::BehaviorMode::Fix {
+                            if let Some(ref hyp) = fix_hypothesis {
+                                mem.add_mistake(
+                                    &format!("{} (hypothesis was: {})", session.base_task, hyp),
+                                    &error_msg,
+                                    &lesson,
+                                    "Hypothesis was wrong. Re-evaluate the problem and try a different approach.",
+                                    &action_history,
+                                );
+                            }
+                        }
                     }
                 }
 
@@ -344,6 +523,58 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 if failure_tracker.should_suggest_correction(&action_type_str, 3) {
                     let correction = failure_tracker.correction_prompt(&action_type_str);
                     conversation.push(Message::system(correction));
+                }
+
+                // --- Plan step failure handling ---
+                if let Some(ref mut p) = plan {
+                    let current_step_idx = current_step;
+                    let fc = step_failures.entry(current_step_idx as u32).or_insert(0);
+                    *fc += 1;
+                    let fail_count = *fc;
+
+                    if fail_count >= 3 {
+                        // Exceeded retries — check if retryable
+                        if Planner::retryable_steps(p).contains(&current_step_idx) {
+                            Planner::increment_retry(p, current_step_idx);
+                            let retry_msg = format!(
+                                "Plan step '{}' failed. Retry attempt {}/3. Try a different approach.",
+                                p.steps.get(current_step_idx).map(|s| s.description.as_str()).unwrap_or("unknown"),
+                                p.steps.get(current_step_idx).map(|s| s.retry_count).unwrap_or(0)
+                            );
+                            conversation.push(Message::system(retry_msg));
+                        } else {
+                            // Max retries reached — mark failed, move on
+                            Planner::fail_step(p, current_step_idx, format!("Failed after multiple retries: {}", e));
+                            let next = Planner::next_ready_step(p);
+                            match next {
+                                Some(idx) => {
+                                    current_step = idx;
+                                    step_iterations.insert(idx as u32, 0);
+                                    step_failures.insert(idx as u32, 0);
+                                    if !session.tui_mode {
+                                        eprintln!("── [Step failed. Moving to next ready step {}: {}] ──",
+                                            current_step + 1,
+                                            p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done"));
+                                    }
+                                }
+                                None => {}
+                            }
+                        }
+                    }
+                }
+
+                // --- Plan replanning trigger ---
+                if let Some(ref mut p) = plan {
+                    let consecutive_fails: u32 = (0..p.steps.len())
+                        .filter_map(|i| step_failures.get(&(i as u32)))
+                        .sum();
+                    if consecutive_fails >= 6 && !plan_recovery_fired {
+                        plan_recovery_fired = true;
+                        conversation.push(Message::system(
+                            "Replan needed: multiple steps are failing. Update PLAN.md with a new approach for the remaining steps. \
+                             Consider breaking large steps into smaller ones."
+                        ));
+                    }
                 }
             }
         }
@@ -353,56 +584,73 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         let plan_path = workspace.join("PLAN.md");
 
         // Try to load PLAN.md on iterations 1+ if not yet loaded
-        if iteration >= 1 && plan.is_none() && !plan_checked.get() {
-            plan_checked.set(true);
+        if iteration >= 1 && plan.is_none() && !plan_checked {
+            plan_checked = true;
             if plan_path.exists() {
                 if let Ok(p) = PlanParser::from_file(&plan_path, &session.base_task) {
-                    let total_steps = p.steps.len();
+                    let total = p.steps.len();
                     plan = Some(p);
+                    // Initialize current_step to first ready step
+                    if let Some(ref p) = plan {
+                        current_step = Planner::next_ready_step(p).unwrap_or(0);
+                    }
                     if !session.tui_mode {
-                        eprintln!("── [Plan loaded: {} steps] ──", total_steps);
+                        eprintln!("── [Plan loaded: {} steps] ──", total);
                     }
                 }
             }
         }
 
-        // Re-parse PLAN.md if it was just written (action was write_file to PLAN.md)
-        if matches!(&action, Action::WriteFile { path, .. } if path.ends_with("PLAN.md") || path.ends_with("plan.md"))
-            || (action_type_name(&action) == "write_file")
-        {
+        // Re-parse PLAN.md only when written to PLAN.md specifically
+        if matches!(&action, Action::WriteFile { path, .. } if path.ends_with("PLAN.md") || path.ends_with("plan.md")) {
             if plan_path.exists() {
                 if let Ok(p) = PlanParser::from_file(&plan_path, &session.base_task) {
                     plan = Some(p);
+                    // Reset step tracking for re-parsed plan
+                    if let Some(ref p) = plan {
+                        current_step = Planner::next_ready_step(p).unwrap_or(0);
+                    }
+                    step_iterations.clear();
+                    step_failures.clear();
+                    plan_recovery_fired = false;
+                    if !session.tui_mode {
+                        eprintln!("── [Plan re-parsed from PLAN.md] ──");
+                    }
                 }
             }
         }
 
         // Increment per-step iteration counter
-        if plan.is_some() {
+        if plan.is_some() && current_step < plan.as_ref().map(|p| p.steps.len()).unwrap_or(0) {
             *step_iterations.entry(current_step as u32).or_insert(0) += 1;
-        }
 
-        // Track step failures
-        let last_result = session.variables.get("last_result");
-        let is_error = last_result.map(|r| r.starts_with("Error:")).unwrap_or(false);
-        if !is_error && plan.is_some() {
-            // success — clear step failure count
-            step_failures.insert(current_step as u32, 0);
-        } else if is_error && plan.is_some() {
-            // failure
-            let fail_count = step_failures.entry(current_step as u32).or_insert(0);
-            *fail_count += 1;
-            if *fail_count >= 3 {
-                let replan_msg = format!(
-                    "WARNING: Plan step {} has failed {} times. Consider replanning: update PLAN.md with a new approach, then continue.",
-                    current_step + 1, *fail_count
-                );
-                conversation.push(Message::system(replan_msg));
-                *fail_count = 0; // reset to avoid spamming
+            // Per-step iteration limit enforcement
+            let step_iter = step_iterations[&(current_step as u32)];
+            let per_step_limit: u32 = if total_steps > 0 { (max_iters as u32 / total_steps as u32).max(5).min(20) } else { 20 };
+            if step_iter >= per_step_limit {
+                if let Some(ref mut p) = plan {
+                    Planner::fail_step(p, current_step, "Exceeded per-step iteration limit.".to_string());
+                    let next = Planner::next_ready_step(p);
+                    match next {
+                        Some(idx) => {
+                            current_step = idx;
+                            step_iterations.insert(idx as u32, 0);
+                            step_failures.insert(idx as u32, 0);
+                        }
+                        None => {}
+                    }
+                }
             }
         }
 
-        // Save session state
+        // Save session state with plan metadata
+        if let Some(ref p) = plan {
+            let done_count = p.steps.iter().filter(|s| s.status == StepStatus::Completed).count();
+            session.variables.insert("plan_current_step".to_string(), current_step.to_string());
+            session.variables.insert("plan_total_steps".to_string(), p.steps.len().to_string());
+            session.variables.insert("plan_completed_steps".to_string(), done_count.to_string());
+            session.variables.insert("plan_goal".to_string(), p.goal.clone());
+        }
         crate::agent::session::save_session_metadata(&ctx, &session)?;
     }
 
@@ -477,7 +725,7 @@ fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String 
 - delete_file:    Delete a file or files matching a glob pattern
   JSON: {{"action": "delete_file", "path": "file.txt"}}
   JSON: {{"action": "delete_file", "path": ".", "pattern": "*.txt"}}
-  NOTE: To match ALL files use "pattern": "*" not "*.*" (which misses files without a dot)
+  NOTE: To match ALL files use "pattern": "*" (not "*.*") which misses files without a dot)
 - copy_file:      Copy source to destination
   JSON: {{"action": "copy_file", "source": "a.txt", "destination": "b.txt"}}
 - create_directory: Create directory (and any missing parents)
@@ -488,6 +736,13 @@ fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String 
   JSON: {{"action": "search_files", "pattern": "*.rs"}}
 - file_metadata:  Get metadata of a file or directory
   JSON: {{"action": "file_metadata", "path": "file.txt"}}
+
+--- CHANGE TRACKING ---
+- show_changes:   Show all file changes from git diff or recently modified files
+  JSON: {{"action": "show_changes"}}
+  JSON: {{"action": "show_changes", "path": "src/"}}
+- restore_backup: Restore a file to its original state from git
+  JSON: {{"action": "restore_backup", "path": "src/main.rs"}}
 
 --- COMMAND EXECUTION ---
 - execute_command: Run a shell command (timeout in seconds)
