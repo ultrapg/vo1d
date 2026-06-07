@@ -12,11 +12,12 @@
 - **Web tools** — Web search (DuckDuckGo) and web page fetching (HTML→markdown conversion)
 - **File & shell tools** — Complete file operations, command execution, directory management, HTTP requests
 - **Context compression** — Opencode-style two-phase pruning & compacting (prune oversized tool outputs + compact old messages)
-- **Training curriculum** — Progressive learning system with 6 curriculum files and task evaluation
+- **Training curriculum** — Progressive learning system with 8 built-in curricula, real-world testing environments, and autotrain mode (`vo1d train --all`)
 - **Self-correction system** — Failure tracking, error classification with tailored suggestions, auto-correction prompts after repeated failures
 - **Documentation-driven system prompt** — Markdown docs loaded at startup and injected into system prompt for better tool usage guidance
 - **Learning memory system** — Cross-session memory that learns from successes and mistakes, stores solutions for future recall, and finds relevant past experiences by keyword similarity
 - **Self-improvement through training** — Training stores successful solutions and records mistakes as lessons; future tasks receive relevant past experiences injected into the prompt
+- **PLAN.md workflow** — Model creates a step-by-step plan file before execution, then works through it methodically
 - **Audit logging** — Every action is logged with timestamps and security context
 - **Hardware profiling** — Auto-detects CPU/GPU/RAM and recommends compatible models
 - **Interactive REPL** — Chat-like interface for iterative task execution
@@ -47,6 +48,7 @@ vo1d/
     │   ├── memory.rs       # Cross-session memory store
     │   ├── compression.rs  # Context compression (prune+compact)
     │   ├── curriculum.rs   # Curriculum evaluation & loading
+    │   ├── embedded_curricula.rs # Binary-embedded curriculum JSON (include_str!)
     │   ├── docs.rs         # Markdown documentation provider for system prompt
     │   ├── self_correction.rs   # FailureTracker & ErrorClassifier
     │   └── error_suggestions.rs # Detailed error analysis with markdown suggestions
@@ -139,8 +141,8 @@ cargo build --features full --release
 # List available models
 vo1d models
 
-# Install a recommended model for your hardware
-vo1d models install qwen25_1.5b
+# Install the default model
+vo1d models install qwen3_1.7b
 
 # Show hardware profile and compatible models
 vo1d models profile
@@ -406,7 +408,7 @@ Train mode provides a structured learning environment where vo1d works through p
 ### Using Train Mode
 
 ```bash
-# List available built-in curricula
+# List available built-in curricula (disk + embedded)
 vo1d train
 
 # Run a built-in curriculum
@@ -416,6 +418,11 @@ vo1d train 02_directory_ops       # Directory operations
 vo1d train 03_search_nav          # File search and navigation
 vo1d train 04_shell_basics        # Shell command basics
 vo1d train 05_web_basics          # Web search and fetch
+vo1d train 06_rust_fix            # Fix broken Rust projects
+vo1d train 07_project_setup       # Real-world project scaffolding
+
+# Run all curricula in sequence (autotrain)
+vo1d train --all
 
 # Manual mode — complete tasks yourself without an LLM model
 vo1d train 00_hello_world --manual
@@ -436,6 +443,7 @@ Curricula are JSON files with this structure:
       "id": "create_hello_txt",
       "description": "Create a file named hello.txt with content 'Hello, World!'",
       "expected_outcome": "hello.txt exists with content 'Hello, World!'",
+      "setup": ["echo 'broken content' > hello.txt"],
       "evaluation": {
         "check_file_exists": ["hello.txt"],
         "check_file_content": ["hello.txt::Hello, World!"],
@@ -455,12 +463,35 @@ Each task can have evaluation criteria (all fields accept arrays for multiple ch
 - `check_directory_exists`: Directories that must exist at specified paths
 - `check_command_output`: Command output checks in `"command::expected text"` format
 
+### Setup (Test Environments)
+
+Tasks can include a `setup` field — shell commands that run in the sandbox **before** the model sees the task. This enables real-world scenarios like fixing broken code or scaffolding an incomplete project:
+
+```json
+{
+  "id": "fix_rust_hello",
+  "description": "Fix the broken Rust hello world program so it compiles and runs",
+  "expected_outcome": "cargo run outputs 'Hello, world!'",
+  "setup": [
+    "cargo init --name hello_broken",
+    "echo 'broken code' > src/main.rs"
+  ],
+  "evaluation": {
+    "check_command_output": ["cargo run 2>&1::Hello, world!"]
+  }
+}
+```
+
 ### Training Features
 
+- **Autotrain** (`--all` / `-a`): Run all 8 built-in curricula in sequence with automatic progression
+- **Embedded curricula**: All curriculum JSON files are compiled into the binary — works even without the `curriculum/` folder on disk
 - **Manual mode** (`--manual`): Complete tasks yourself without an LLM model — the system prints each task, waits for you to create the files, then evaluates
 - **Sandboxed execution**: Each task runs in a clean sandbox directory
+- **Setup commands**: Run arbitrary shell commands before each task to create realistic broken/incomplete projects
+- **PLAN.md workflow**: Model is prompted to create a plan file first, then execute step by step
 - **Memory accumulation**: Task outcomes are stored in memory across the curriculum
-- **Solution storage**: Successful completions stored as solutions with keyword tags for future recall
+- **Solution storage**: Successful completions stored as solutions with full action sequences for future recall
 - **Mistake learning**: Failures recorded as mistakes with lessons and avoidance strategies
 - **Similar experience recall**: Before each task, memory is searched for similar past problems and their solutions/lessons are injected into the prompt
 - **Progress tracking**: Shows task-by-task progress with success/failure indicators
@@ -477,6 +508,8 @@ Each task can have evaluation criteria (all fields accept arrays for multiple ch
 | `03_search_nav` | File search and navigation | 3 tasks |
 | `04_shell_basics` | Shell command usage | 3 tasks |
 | `05_web_basics` | Web search and fetch | 2 tasks |
+| `06_rust_fix` | Fix broken Rust projects (setup commands) | 3 tasks |
+| `07_project_setup` | Real-world project scaffolding | 3 tasks |
 
 ### Memory & Learning Integration
 
@@ -754,9 +787,9 @@ GPU(s):
   Intel(R) HD Graphics 620 (Intel) - No dedicated VRAM
 
 Compatible Models:
-  [✓] qwen25_1.5b (Qwen2.5 1.5B Instruct)
-  [✗] qwen25_3b (Qwen2.5 3B Instruct)
-  [✗] qwen25_7b (Qwen2.5 7B Instruct)
+  [✓] qwen3_1.7b (Qwen3 1.7B)
+  [✗] qwen3_4b (Qwen3 4B)
+  [✗] qwen3_8b (Qwen3 8B)
   ... and 3 more compatible models
 ```
 
@@ -783,28 +816,29 @@ The profiler checks:
                         └──┬───────┬──────┬───┘
                            │       │      │
                     ┌──────▼──┐ ┌──▼──────▼──┐
-                    │  LLM   │ │  Tool      │
+                    │   LLM   │ │  Tool      │
                     │ Backend │ │  System    │
                     └─────────┘ │  (registry)│
-                               └──┬─────────┘
-                                  │
-                       ┌──────────▼──────────┐
-                       │  Tool Executors     │
-                       │ (file, cmd, http,   │
-                       │  web_search,        │
-                       │  web_fetch)         │
-                       └─────────────────────┘
+                                └──┬─────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │  Tool Executors     │
+                        │ (file, cmd, http,   │
+                        │  web_search,        │
+                        │  web_fetch)         │
+                        └─────────────────────┘
 ```
 
 ### Component Details
 
 - **CLI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or `vo1d train`.
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider. Cloned per task.
-- **Agent Loop**: Iterates up to `max_iterations`. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → context compression if needed.
+- **Agent Loop**: Iterates up to `max_iterations` (no hardcoded limit). Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → context compression if needed.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Current implementations: `builtin` (llama.cpp via `llama-cpp-2`). Backends are pluggable.
 - **Tool System**: Registry of 14 available tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown).
 - **Security Manager**: Evaluates each action against the current mode. Can approve, ask, or block. All decisions are audited.
 - **Doc Provider**: Loads markdown documentation from `docs/` and injects into system prompt for better tool usage guidance.
+- **Memory System**: Cross-session learning memory — stores solutions, mistakes, notes, patterns, tracks action sequences for richer recall.
 - **Self-Correction**: `FailureTracker` monitors consecutive failures per action type; `ErrorClassifier` and `error_suggestions` produce detailed markdown suggestions.
 - **Context Compressor**: Two-phase pruning + compacting when conversation exceeds ~80% of context limit.
 
@@ -858,7 +892,7 @@ cargo test --features llamacpp-builtin
 | `Model file not found` | Run `vo1d models install <model-id>` |
 | `Failed to load model at startup` | The model file is missing or corrupt. Reinstall with `vo1d models install <model-id>` |
 | `spawn_blocking panicked` in `builtin.rs` | Usually a model crash. Check RAM usage and reduce `context_size` or `gpu_layers` |
-| Model keeps generating infinite tool calls | The model may not be receiving the correct ChatML prompt. Check `add_bos_token` matches the model metadata. Qwen2.5 expects `<|im_start|>` tags |
+| Model keeps generating infinite tool calls | The model may not be receiving the correct ChatML prompt. Check `add_bos_token` matches the model metadata. Qwen3 expects `<|im_start|>` tags |
 | LLM output is garbled or mixed with C library stderr | llama.cpp writes to stderr via CRT `fprintf`. vo1d suppresses this with `_dup2` at the CRT file-descriptor level; verify `stderr_guard.rs` compiled correctly |
 | Build fails with linker errors on Windows | You need MSVC build tools (Visual Studio Build Tools or Visual Studio). The `+crt-static` flag must NOT be in `.cargo/config.toml` |
 
