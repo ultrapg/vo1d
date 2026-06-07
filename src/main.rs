@@ -89,6 +89,32 @@ enum Commands {
         #[arg(long, default_value = "20")]
         tail: usize,
     },
+    /// Manage VO1D's memory and learning
+    Memory {
+        #[command(subcommand)]
+        action: Option<MemoryAction>,
+    },
+}
+
+#[derive(Subcommand)]
+enum MemoryAction {
+    /// Show memory stats and recent entries
+    List,
+    /// Show a specific memory by ID
+    Show { id: String },
+    /// Delete a specific memory by ID
+    Delete { id: String },
+    /// Clear all memories (or a subset: all, solutions, mistakes, notes, patterns, history)
+    Clear {
+        #[arg(default_value = "all")]
+        memory_type: String,
+    },
+    /// Add a custom note to memory
+    Add {
+        content: String,
+        #[arg(long, default_value = "")]
+        tags: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -169,6 +195,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config) => {
             run_config(ctx).await?;
+        }
+        Some(Commands::Memory { action }) => {
+            run_memory(ctx, action).await?;
         }
         Some(Commands::Logs { tail }) => {
             run_logs(ctx, tail).await?;
@@ -337,6 +366,102 @@ fn resolve_curriculum_path(ctx: &AppContext, name: &str) -> Result<std::path::Pa
 async fn run_train(ctx: AppContext, curriculum: &str, manual: bool) -> Result<()> {
     let curriculum_path = resolve_curriculum_path(&ctx, curriculum)?;
     vo1d::agent::train::run_curriculum(ctx, &curriculum_path.to_string_lossy(), manual).await?;
+    Ok(())
+}
+
+async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()> {
+    match action {
+        Some(MemoryAction::List) | None => {
+            let mem = ctx.memory.lock().unwrap();
+            let s = mem.stats();
+            println!("=== VO1D MEMORY ===\n{}\n", s);
+
+            if !mem.solutions.is_empty() {
+                println!("--- SOLUTIONS ---");
+                for sol in mem.solutions.iter().rev().take(10) {
+                    println!("  [{}] {} → {}", sol.id, sol.task_description, sol.outcome);
+                }
+            }
+            if !mem.mistakes.is_empty() {
+                println!("\n--- MISTAKES ---");
+                for mist in mem.mistakes.iter().rev().take(10) {
+                    println!("  [{}] (freq:{}) {}", mist.id, mist.frequency, mist.mistake);
+                }
+            }
+            if !mem.patterns.is_empty() {
+                println!("\n--- PATTERNS ---");
+                for p in mem.patterns.iter().filter(|p| p.confidence > 0.5).take(10) {
+                    println!("  [conf:{:.0}%] \"{}\"", p.confidence * 100.0, p.suggestion);
+                }
+            }
+            if !mem.notes.is_empty() {
+                println!("\n--- NOTES ---");
+                for note in mem.notes.iter().rev().take(10) {
+                    println!("  [{}] {} (tags: {})", note.id, note.content, note.tags.join(", "));
+                }
+            }
+            if !mem.preferences.is_empty() {
+                println!("\n--- PREFERENCES ---");
+                for (k, v) in &mem.preferences {
+                    if !k.starts_with('_') {
+                        println!("  {}: {}", k, v);
+                    }
+                }
+            }
+            println!();
+        }
+        Some(MemoryAction::Show { id }) => {
+            let mem = ctx.memory.lock().unwrap();
+            if let Some(sol) = mem.solutions.iter().find(|s| s.id == id) {
+                println!("=== Solution: {} ===", sol.id);
+                println!("Task: {}", sol.task_description);
+                println!("Solution: {}", sol.solution);
+                println!("Outcome: {}", sol.outcome);
+                println!("Tags: {}", sol.tags.join(", "));
+                println!("Timestamp: {}", sol.timestamp);
+            } else if let Some(mist) = mem.mistakes.iter().find(|m| m.id == id) {
+                println!("=== Mistake: {} ===", mist.id);
+                println!("Task: {}", mist.task_description);
+                println!("Mistake: {}", mist.mistake);
+                println!("Lesson: {}", mist.lesson);
+                println!("How to avoid: {}", mist.how_to_avoid);
+                println!("Frequency: {}", mist.frequency);
+                println!("Tags: {}", mist.tags.join(", "));
+                println!("Timestamp: {}", mist.timestamp);
+            } else if let Some(note) = mem.notes.iter().find(|n| n.id == id) {
+                println!("=== Note: {} ===", note.id);
+                println!("Content: {}", note.content);
+                println!("Tags: {}", note.tags.join(", "));
+                println!("Timestamp: {}", note.timestamp);
+            } else {
+                println!("No memory found with ID: {}", id);
+            }
+        }
+        Some(MemoryAction::Delete { id }) => {
+            let mut mem = ctx.memory.lock().unwrap();
+            if mem.delete(&id) {
+                println!("✓ Deleted memory: {}", id);
+            } else {
+                println!("No memory found with ID: {}", id);
+            }
+        }
+        Some(MemoryAction::Clear { memory_type }) => {
+            let mem_type = if memory_type == "all" { None } else { Some(memory_type.as_str()) };
+            let mut mem = ctx.memory.lock().unwrap();
+            mem.clear(mem_type);
+            println!("✓ Cleared memories ({})", memory_type);
+        }
+        Some(MemoryAction::Add { content, tags }) => {
+            let tag_list: Vec<String> = if tags.is_empty() {
+                Vec::new()
+            } else {
+                tags.split(',').map(|t| t.trim().to_string()).collect()
+            };
+            let mut mem = ctx.memory.lock().unwrap();
+            let id = mem.add_note(&content, tag_list);
+            println!("✓ Added note: {}", id);
+        }
+    }
     Ok(())
 }
 

@@ -78,6 +78,7 @@ pub async fn interactive_repl(ctx: AppContext) -> Result<()> {
                 println!("  <task>     Execute a task");
                 println!("  /exit      Exit the REPL");
                 println!("  /help      Show this help");
+                println!("  /memory    Show learned memory");
                 println!("  /model     Show current model");
                 println!("  /mode      Show security mode");
                 println!("  /session   Show session info");
@@ -89,6 +90,24 @@ pub async fn interactive_repl(ctx: AppContext) -> Result<()> {
             }
             "/mode" => {
                 println!("Mode: {}", ctx.security.current_mode);
+                continue;
+            }
+            "/memory" => {
+                let mem = ctx.memory.lock().unwrap();
+                let stats = mem.stats();
+                println!("=== MEMORY ===\n{}\n", stats);
+                if !mem.solutions.is_empty() {
+                    println!("Recent solutions:");
+                    for sol in mem.solutions.iter().rev().take(5) {
+                        println!("  {} → {}", sol.task_description, sol.outcome);
+                    }
+                }
+                if !mem.mistakes.is_empty() {
+                    println!("\nLearned mistakes:");
+                    for mist in mem.mistakes.iter().rev().take(5) {
+                        println!("  (freq:{}) {}", mist.frequency, mist.mistake);
+                    }
+                }
                 continue;
             }
             _ => {}

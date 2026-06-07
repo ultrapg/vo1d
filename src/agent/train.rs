@@ -109,6 +109,12 @@ async fn run_all_tasks_manual(curriculum: &Curriculum, sandbox: &Path) -> Result
 }
 
 async fn run_single_task(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, sandbox: &Path) -> Result<EvaluationResult> {
+    // Pull relevant past experiences into the prompt
+    let memory_recall = match ctx.memory.lock() {
+        Ok(mem) => mem.to_context_string_with_recall(&task.description),
+        Err(_) => String::new(),
+    };
+
     let prompt = format!(
         r#"Training exercise: {}
 
@@ -116,17 +122,23 @@ Work inside the sandbox directory: {}
 Your task: {}
 
 Expected outcome: {}
-Complete this task and then use "finish" to signal completion."#,
+Complete this task and then use "finish" to signal completion.
+{}"#,
         task.id,
         sandbox.display(),
         task.description,
         task.expected_outcome,
+        if memory_recall.is_empty() { String::new() } else { format!("\nPrevious experiences to learn from:\n{}", memory_recall) },
     );
 
     let start = Instant::now();
 
-    let session = Session::new(&prompt, ctx)?;
-    let result = crate::agent::loop_::agent_loop(ctx.clone(), session).await?;
+    // Override workspace to the sandbox so file operations resolve correctly
+    let mut train_ctx = ctx.clone();
+    train_ctx.paths = ctx.paths.with_workspace_override(sandbox.to_path_buf());
+
+    let session = Session::new(&prompt, &train_ctx)?;
+    let result = crate::agent::loop_::agent_loop(train_ctx, session).await?;
 
     let elapsed = start.elapsed();
     let evaluation = evaluate_task(task, sandbox);
@@ -154,9 +166,29 @@ fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinit
             &result.outcome,
         );
         if result.passed {
+            let solution = format!("Used correct approach for '{}' and achieved: {}",
+                task.description, task.expected_outcome);
+            mem.add_solution(&task.description, &solution, &result.outcome);
             mem.add_pattern(
                 &format!("task:{}", task.id),
                 &format!("Completed: {}", task.expected_outcome),
+            );
+        } else {
+            let mistakes: Vec<&str> = result.details.iter()
+                .filter(|d| d.starts_with("FAIL:"))
+                .map(|d| d.as_str())
+                .collect();
+            let mistake_desc = if mistakes.is_empty() {
+                "Unknown failure".to_string()
+            } else {
+                mistakes.join("; ")
+            };
+            mem.add_mistake(
+                &task.description,
+                &mistake_desc,
+                "This approach did not work — need to follow the expected outcome more carefully.",
+                &format!("When working on '{}', ensure the expected outcome '{}' is fully met. Check file paths carefully.",
+                    task.description, task.expected_outcome),
             );
         }
     }

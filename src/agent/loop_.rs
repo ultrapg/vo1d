@@ -269,6 +269,20 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 let action_type_str = action_type_name(&action).to_string();
                 failure_tracker.record(&action_type_str);
                 
+                // Learn from mistakes: store in persistent memory
+                if failure_tracker.should_suggest_correction(&action_type_str, 2) {
+                    if let Ok(mut mem) = ctx.memory.lock() {
+                        let error_msg = format!("{}: {}", action.description(), e);
+                        let lesson = failure_tracker.correction_prompt(&action_type_str);
+                        mem.add_mistake(
+                            &session.base_task,
+                            &error_msg,
+                            &lesson,
+                            &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
+                        );
+                    }
+                }
+
                 // Self-correction prompt after repeated failures
                 if failure_tracker.should_suggest_correction(&action_type_str, 3) {
                     let correction = failure_tracker.correction_prompt(&action_type_str);

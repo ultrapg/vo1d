@@ -7,6 +7,8 @@ use tracing::info;
 pub struct Vo1dPaths {
     /// Root directory containing the binary
     root: PathBuf,
+    /// Optional override for workspace_dir (used during training)
+    workspace_override: Option<PathBuf>,
 }
 
 impl Vo1dPaths {
@@ -19,7 +21,7 @@ impl Vo1dPaths {
             .context("Failed to get executable parent directory")?
             .to_path_buf();
         info!("VO1D root directory: {}", root.display());
-        Ok(Self { root })
+        Ok(Self { root, workspace_override: None })
     }
 
     pub fn root_dir(&self) -> &Path {
@@ -39,7 +41,17 @@ impl Vo1dPaths {
     }
 
     pub fn workspace_dir(&self) -> PathBuf {
-        self.root.join("workspace")
+        self.workspace_override
+            .clone()
+            .unwrap_or_else(|| self.root.join("workspace"))
+    }
+
+    /// Create a copy with an overridden workspace directory (used for training).
+    pub fn with_workspace_override(&self, path: PathBuf) -> Self {
+        Self {
+            root: self.root.clone(),
+            workspace_override: Some(path),
+        }
     }
 
     pub fn cache_dir(&self) -> PathBuf {
