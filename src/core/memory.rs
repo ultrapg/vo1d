@@ -161,19 +161,29 @@ impl MemoryStore {
     }
 
     /// Store a successful solution for future recall.
+    /// `actions_taken` records the sequence of actions that led to success.
     /// Extracts tags from the task description for similarity matching.
-    pub fn add_solution(&mut self, task_description: &str, solution: &str, outcome: &str) {
+    pub fn add_solution(&mut self, task_description: &str, solution: &str, outcome: &str, actions_taken: &[String]) {
         let tags = Self::extract_tags(task_description);
         let id = Self::next_id("sol");
-        self.solutions.push(SolutionRecord {
-            id,
-            task_description: task_description.to_string(),
-            tags,
-            solution: solution.to_string(),
-            outcome: outcome.to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            success_count: 1,
-        });
+
+        // Deduplicate: if same task exists, update it with higher success_count
+        if let Some(existing) = self.solutions.iter_mut().find(|s| s.task_description == task_description) {
+            existing.success_count += 1;
+            existing.solution = solution.to_string();
+            existing.outcome = outcome.to_string();
+            existing.timestamp = chrono::Utc::now().to_rfc3339();
+        } else {
+            self.solutions.push(SolutionRecord {
+                id,
+                task_description: task_description.to_string(),
+                tags,
+                solution: format!("{} | Actions: [{}]", solution, actions_taken.join(", ")),
+                outcome: outcome.to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                success_count: 1,
+            });
+        }
         if self.solutions.len() > 100 {
             self.solutions.remove(0);
         }
@@ -181,19 +191,28 @@ impl MemoryStore {
     }
 
     /// Store a mistake with what was learned and how to avoid it.
-    pub fn add_mistake(&mut self, task_description: &str, mistake: &str, lesson: &str, how_to_avoid: &str) {
+    /// `actions_taken` records the action sequence that led to the mistake.
+    pub fn add_mistake(&mut self, task_description: &str, mistake: &str, lesson: &str, how_to_avoid: &str, actions_taken: &[String]) {
         let tags = Self::extract_tags(task_description);
         let id = Self::next_id("mist");
 
         if let Some(existing) = self.mistakes.iter_mut().find(|m| m.mistake == mistake) {
             existing.frequency += 1;
             existing.timestamp = chrono::Utc::now().to_rfc3339();
+            if !actions_taken.is_empty() {
+                existing.lesson = format!("{} (actions that failed: {})", lesson, actions_taken.join(", "));
+            }
         } else {
+            let enriched_mistake = if !actions_taken.is_empty() {
+                format!("{} | Actions: [{}]", mistake, actions_taken.join(", "))
+            } else {
+                mistake.to_string()
+            };
             self.mistakes.push(MistakeRecord {
                 id,
                 task_description: task_description.to_string(),
                 tags,
-                mistake: mistake.to_string(),
+                mistake: enriched_mistake,
                 lesson: lesson.to_string(),
                 how_to_avoid: how_to_avoid.to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),

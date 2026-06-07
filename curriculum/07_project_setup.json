@@ -1,0 +1,32 @@
+{
+  "name": "Real-World Project Setup",
+  "description": "Set up real project structures from scratch: a Python script, a Markdown documentation site, and a data processing pipeline.",
+  "tasks": [
+    {
+      "id": "setup_python_project",
+      "description": "Create a small Python project with the following structure: project_root/main.py, project_root/README.md, project_root/requirements.txt. main.py should contain a Python script that prints 'Project setup complete!'. README.md should describe the project. requirements.txt should list 'requests' and 'pytest'.",
+      "expected_outcome": "A complete Python project structure exists with all required files",
+      "evaluation": {
+        "check_file_exists": ["project_root/main.py", "project_root/README.md", "project_root/requirements.txt"],
+        "check_file_content": ["main.py::Project setup complete", "requirements.txt::requests"]
+      }
+    },
+    {
+      "id": "setup_doc_site",
+      "description": "Create a mini documentation site structure: docs/index.md, docs/guide/getting-started.md, docs/api/reference.md. Each file should have a proper Markdown heading and at least 2 lines of content. index.md should link to the other pages.",
+      "expected_outcome": "A nested documentation directory structure with linked Markdown files",
+      "evaluation": {
+        "check_directory_exists": ["docs", "docs/guide", "docs/api"],
+        "check_file_exists": ["docs/index.md", "docs/guide/getting-started.md", "docs/api/reference.md"]
+      }
+    },
+    {
+      "id": "data_pipeline",
+      "description": "Create a data processing pipeline: 1) Create raw_data.csv with 5 rows of sample data (name,value). 2) Create a script process.py that reads raw_data.csv, filters rows where value > 50, sorts them descending by value, and writes the result to filtered_data.csv. 3) Run the script to verify it works.",
+      "expected_outcome": "filtered_data.csv exists with correctly filtered and sorted data",
+      "evaluation": {
+        "check_file_exists": ["raw_data.csv", "process.py", "filtered_data.csv"]
+      }
+    }
+  ]
+}

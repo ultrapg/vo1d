@@ -26,6 +26,10 @@ pub struct TaskDefinition {
     pub description: String,
     pub expected_outcome: String,
     pub evaluation: Option<EvaluationCriteria>,
+    /// Optional shell commands to set up the environment before the task
+    /// (e.g., create a broken project for the model to fix)
+    #[serde(default)]
+    pub setup: Option<Vec<String>>,
 }
 
 /// A curriculum loaded from a JSON file.
@@ -41,6 +45,25 @@ impl Curriculum {
         let content = std::fs::read_to_string(path.as_ref())?;
         let curriculum: Curriculum = serde_json::from_str(&content)?;
         Ok(curriculum)
+    }
+
+    /// Try to load from disk by name, falling back to the binary-embedded copy.
+    pub fn load_from_name(ctx: &crate::AppContext, name: &str) -> Result<Self> {
+        // Try disk paths
+        let disk_paths = [
+            ctx.paths.curriculum_dir().join(format!("{}.json", name)),
+            ctx.paths.root_dir().join("curriculum").join(format!("{}.json", name)),
+        ];
+        for p in &disk_paths {
+            if p.exists() {
+                return Curriculum::load(p);
+            }
+        }
+        // Fall back to embedded
+        match crate::core::embedded_curricula::get(name) {
+            Some(json) => Ok(serde_json::from_str(json)?),
+            None => anyhow::bail!("Curriculum '{}' not found on disk or embedded in binary", name),
+        }
     }
 
     pub fn task_count(&self) -> usize {
@@ -165,6 +188,7 @@ mod tests {
             description: "Do something".to_string(),
             expected_outcome: "Done".to_string(),
             evaluation: None,
+            setup: None,
         };
         let result = evaluate_task(&task, Path::new("."));
         assert!(result.passed);
@@ -187,6 +211,7 @@ mod tests {
                 check_directory_exists: None,
                 check_command_output: None,
             }),
+            setup: None,
         };
         let result = evaluate_task(&task, dir.path());
         assert!(result.passed);
@@ -205,6 +230,7 @@ mod tests {
                 check_directory_exists: None,
                 check_command_output: None,
             }),
+            setup: None,
         };
         let result = evaluate_task(&task, dir.path());
         assert!(!result.passed);
@@ -225,6 +251,7 @@ mod tests {
                 check_directory_exists: None,
                 check_command_output: None,
             }),
+            setup: None,
         };
         let result = evaluate_task(&task, dir.path());
         assert!(result.passed);
@@ -245,6 +272,7 @@ mod tests {
                 check_directory_exists: Some(vec!["subdir".to_string()]),
                 check_command_output: None,
             }),
+            setup: None,
         };
         let result = evaluate_task(&task, dir.path());
         assert!(result.passed);

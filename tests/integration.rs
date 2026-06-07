@@ -160,6 +160,7 @@ fn test_evaluate_task_integration() {
             check_directory_exists: Some(vec!["mydir".to_string()]),
             check_command_output: None,
         }),
+        setup: None,
     };
 
     let result = evaluate_task(&task, dir.path());

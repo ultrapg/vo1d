@@ -85,8 +85,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 .map(|s| format!(". Result: {}", s.chars().take(500).collect::<String>()))
                 .unwrap_or_default();
             let progress_msg = format!(
-                "[Progress: step {}/50. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]",
+                "[Progress: step {}/{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]",
                 iteration + 1,
+                max_iters,
                 prev_action.trim_end_matches('.'),
                 prev_result,
                 session.base_task,
@@ -167,9 +168,11 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         // Loop detection
         let action_type = action_type_name(&action);
         action_history.push(action_type.to_string());
-        if action_history.len() > 5 {
+        if action_history.len() > 50 {
             action_history.remove(0);
         }
+        // Store action history on session for memory recall
+        session.variables.insert("action_history".to_string(), action_history.join(","));
         let repeat_count = action_history.iter()
             .rev()
             .take_while(|&a| a == action_type)
@@ -279,6 +282,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                             &error_msg,
                             &lesson,
                             &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
+                            &action_history,
                         );
                     }
                 }
@@ -404,6 +408,14 @@ fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String 
     let conversational_note = r#"If the user is just chatting, asking a question, or having a conversation — respond naturally without tools.
 Only use actions when the user asks you to perform a task (read/write files, run commands, search, etc.)."#;
 
+    let planning_note = r#"
+PLANNING WORKFLOW (for complex tasks):
+1. First create a PLAN.md file describing the steps you will take
+2. Execute each step one at a time
+3. Update PLAN.md with progress as you go (mark steps [x] when done)
+4. Check your work between steps
+5. Call finish when all steps are complete"#;
+
     let tool_instructions = r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
 
 --- CORRECT EXAMPLE (single action after reasoning) ---
@@ -456,6 +468,8 @@ Your workspace is: {ws}
 
 {conversational_note}
 
+{planning_note}
+
 {tool_docs}
 
 {tool_instructions}
@@ -468,6 +482,7 @@ RULES:
 - Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
             mode = mode, ws = ws,
             conversational_note = conversational_note,
+            planning_note = planning_note,
             tool_docs = tool_docs, tool_instructions = tool_instructions,
             os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
         )
@@ -501,6 +516,8 @@ Your workspace is: {ws}
 
 {conversational_note}
 
+{planning_note}
+
 {tool_docs}
 
 {tool_instructions_sim}
@@ -512,6 +529,7 @@ RULES:
 - Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
             mode = mode, ws = ws,
             conversational_note = conversational_note,
+            planning_note = planning_note,
             tool_docs = tool_docs, tool_instructions_sim = tool_instructions_sim,
             os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
         )

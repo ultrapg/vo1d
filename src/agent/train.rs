@@ -5,9 +5,66 @@ use anyhow::Result;
 use std::path::Path;
 use std::time::Instant;
 
-/// Runs the agent on a curriculum of training tasks.
-pub async fn run_curriculum(ctx: AppContext, curriculum_path: &str, manual: bool) -> Result<()> {
-    let curriculum = Curriculum::load(curriculum_path)?;
+/// Runs a curriculum by name, trying disk then embedded fallback.
+pub async fn run_curriculum_by_name(ctx: AppContext, name: &str, manual: bool) -> Result<()> {
+    let curriculum = Curriculum::load_from_name(&ctx, name)?;
+    run_curriculum_raw_with(ctx, curriculum, manual).await
+}
+
+/// Ordered list of built-in curricula for autotrain.
+const AUTOTRAIN_CURRICULA: &[&str] = &[
+    "00_hello_world",
+    "01_file_ops",
+    "02_directory_ops",
+    "03_search_nav",
+    "04_shell_basics",
+    "05_web_basics",
+    "06_rust_fix",
+    "07_project_setup",
+];
+
+/// Runs all built-in curricula in sequence (autotrain mode).
+pub async fn run_autotrain(ctx: AppContext, manual: bool) -> Result<()> {
+    println!("\n=== AUTOTRAIN MODE ===");
+    println!("Running all {} curricula in sequence...\n", AUTOTRAIN_CURRICULA.len());
+
+    for (i, name) in AUTOTRAIN_CURRICULA.iter().enumerate() {
+        println!("\n═══ Curriculum {}/{}: {} ═══", i + 1, AUTOTRAIN_CURRICULA.len(), name);
+
+        match Curriculum::load_from_name(&ctx, name) {
+            Ok(curriculum) => {
+                run_curriculum_raw_with(ctx.clone(), curriculum, manual).await?;
+            }
+            Err(e) => {
+                eprintln!("  ⚠ {}", e);
+                continue;
+            }
+        }
+
+        if i + 1 < AUTOTRAIN_CURRICULA.len() {
+            println!("\n  --- Moving to next curriculum in 2 seconds... ---");
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    }
+
+    println!("\n=== AUTOTRAIN COMPLETE ===");
+    Ok(())
+}
+
+/// Runs the agent on a curriculum loaded from a file path.
+/// Falls back to embedded if the path doesn't exist.
+pub async fn run_curriculum(ctx: AppContext, name_or_path: &str, manual: bool) -> Result<()> {
+    let path = std::path::Path::new(name_or_path);
+    let curriculum = if path.is_file() {
+        Curriculum::load(path)?
+    } else {
+        // Treat as name, try disk + embedded
+        Curriculum::load_from_name(&ctx, name_or_path)?
+    };
+    run_curriculum_raw_with(ctx, curriculum, manual).await
+}
+
+async fn run_curriculum_raw_with(ctx: AppContext, curriculum: Curriculum, manual: bool) -> Result<()> {
     let curriculum_name = curriculum.name.clone();
     let total = curriculum.task_count();
 
@@ -109,10 +166,24 @@ async fn run_all_tasks_manual(curriculum: &Curriculum, sandbox: &Path) -> Result
 }
 
 async fn run_single_task(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, sandbox: &Path) -> Result<EvaluationResult> {
+    // Run setup commands to create testing environment
+    if task.setup.is_some() {
+        println!("  Setting up test environment...");
+        if let Err(e) = execute_setup(task, sandbox) {
+            eprintln!("  ⚠ Setup error: {}", e);
+        }
+    }
+
     // Pull relevant past experiences into the prompt
     let memory_recall = match ctx.memory.lock() {
         Ok(mem) => mem.to_context_string_with_recall(&task.description),
         Err(_) => String::new(),
+    };
+
+    let setup_note = if task.setup.is_some() {
+        "\nThe sandbox has been pre-configured with a test environment. Inspect it first before making changes."
+    } else {
+        ""
     };
 
     let prompt = format!(
@@ -123,11 +194,18 @@ Your task: {}
 
 Expected outcome: {}
 Complete this task and then use "finish" to signal completion.
-{}"#,
+{}{}
+
+WORKFLOW:
+1. First, create a PLAN.md file in the sandbox that lists the steps you will take to complete this task
+2. Execute each step from the plan one at a time
+3. Check your work after each step
+4. When all steps are done, call finish"#,
         task.id,
         sandbox.display(),
         task.description,
         task.expected_outcome,
+        setup_note,
         if memory_recall.is_empty() { String::new() } else { format!("\nPrevious experiences to learn from:\n{}", memory_recall) },
     );
 
@@ -143,19 +221,44 @@ Complete this task and then use "finish" to signal completion.
     let elapsed = start.elapsed();
     let evaluation = evaluate_task(task, sandbox);
 
-    let actions_taken: Vec<String> = result.variables.get("action_count")
-        .map(|c| vec![format!("{} actions in {:?}", c, elapsed)])
+    // Collect action sequence for richer memory
+    let actions_taken: Vec<String> = result.variables.get("action_history")
+        .map(|h| h.split(',').map(|s| s.to_string()).collect())
         .unwrap_or_default();
+    let action_summary = if actions_taken.is_empty() {
+        vec![format!("{} actions in {:?}", result.variables.get("action_count").map(|c| c.as_str()).unwrap_or("?"), elapsed)]
+    } else {
+        actions_taken.clone()
+    };
 
     if let Ok(mut mem) = ctx.memory.lock() {
         mem.add_task(
             &format!("train:{}", task.id),
-            actions_taken,
+            action_summary,
             &format!("{} ({:?})", evaluation.outcome, elapsed),
         );
     }
 
     Ok(evaluation)
+}
+
+/// Run setup commands for a task (creates testing environment).
+fn execute_setup(task: &crate::core::curriculum::TaskDefinition, sandbox: &Path) -> Result<()> {
+    if let Some(ref setup_cmds) = task.setup {
+        let shell = if cfg!(windows) { "cmd.exe" } else { "sh" };
+        let arg = if cfg!(windows) { "/C" } else { "-c" };
+        for cmd in setup_cmds {
+            let output = std::process::Command::new(shell)
+                .args(&[arg, cmd])
+                .current_dir(sandbox)
+                .output()?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                eprintln!("  ⚠ Setup command warning: {} => {}", cmd, stderr.trim());
+            }
+        }
+    }
+    Ok(())
 }
 
 fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, result: &EvaluationResult) {
@@ -168,7 +271,7 @@ fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinit
         if result.passed {
             let solution = format!("Used correct approach for '{}' and achieved: {}",
                 task.description, task.expected_outcome);
-            mem.add_solution(&task.description, &solution, &result.outcome);
+            mem.add_solution(&task.description, &solution, &result.outcome, &[]);
             mem.add_pattern(
                 &format!("task:{}", task.id),
                 &format!("Completed: {}", task.expected_outcome),
@@ -189,6 +292,7 @@ fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinit
                 "This approach did not work — need to follow the expected outcome more carefully.",
                 &format!("When working on '{}', ensure the expected outcome '{}' is fully met. Check file paths carefully.",
                     task.description, task.expected_outcome),
+                &[],
             );
         }
     }
@@ -231,6 +335,7 @@ mod tests {
                 description: "d".to_string(),
                 expected_outcome: "o".to_string(),
                 evaluation: None,
+                setup: None,
             }],
         };
         let results = vec![EvaluationResult {

@@ -1,0 +1,61 @@
+{
+  "name": "Fix Broken Rust Project",
+  "description": "Diagnose and fix errors in a pre-set Rust project that has compilation errors and logical bugs.",
+  "tasks": [
+    {
+      "id": "fix_hello_rs",
+      "description": "A file called hello.rs exists in the sandbox with a broken Rust program. Fix all compilation errors so that 'rustc hello.rs' (or 'rustc hello.rs && hello.exe' on Windows) produces the correct output 'Hello, fixed world!'",
+      "expected_outcome": "hello.rs compiles and runs, printing 'Hello, fixed world!'",
+      "setup": [
+        "echo fn main() { println!(\"Hello, wrld!\") } > hello.rs"
+      ],
+      "evaluation": {
+        "check_file_exists": ["hello.rs"],
+        "check_file_content": ["hello.rs::fixed"]
+      }
+    },
+    {
+      "id": "fix_calculator_rs",
+      "description": "A file called calc.rs exists with a Rust calculator program that has a bug. Fix the logic error: the program reads two numbers and prints their sum, but the current implementation subtracts instead of adding. Fix it so it correctly adds the numbers.",
+      "expected_outcome": "calc.rs is fixed to correctly add numbers instead of subtracting",
+      "setup": [
+        "echo use std::io; > calc.rs",
+        "echo fn main() { >> calc.rs",
+        "echo     let mut a = String::new(); >> calc.rs",
+        "echo     let mut b = String::new(); >> calc.rs",
+        "echo     io::stdin().read_line(&mut a).unwrap(); >> calc.rs",
+        "echo     io::stdin().read_line(&mut b).unwrap(); >> calc.rs",
+        "echo     let x: i32 = a.trim().parse().unwrap(); >> calc.rs",
+        "echo     let y: i32 = b.trim().parse().unwrap(); >> calc.rs",
+        "echo     println!(\"{}\", x - y); // BUG: should be x + y >> calc.rs",
+        "echo } >> calc.rs"
+      ],
+      "evaluation": {
+        "check_file_exists": ["calc.rs"],
+        "check_file_content": ["calc.rs::x + y"]
+      }
+    },
+    {
+      "id": "fix_cargo_project",
+      "description": "A directory 'my_app' exists with a broken Cargo project. Use cargo build inside it, read the error messages, and fix the source code so that 'cargo build' succeeds.",
+      "expected_outcome": "cargo build succeeds in the my_app directory",
+      "setup": [
+        "mkdir my_app 2>nul || mkdir my_app",
+        "mkdir my_app\\src 2>nul || mkdir my_app\\src",
+        "echo [package] > my_app\\Cargo.toml",
+        "echo name = \"my_app\" >> my_app\\Cargo.toml",
+        "echo version = \"0.1.0\" >> my_app\\Cargo.toml",
+        "echo edition = \"2021\" >> my_app\\Cargo.toml",
+        "echo fn main() { >> my_app\\src\\main.rs",
+        "echo     let x: String = 42; // TYPE ERROR >> my_app\\src\\main.rs",
+        "echo     println!(\"Value: {}\", x); >> my_app\\src\\main.rs",
+        "echo } >> my_app\\src\\main.rs"
+      ],
+      "evaluation": {
+        "check_directory_exists": ["my_app"],
+        "check_file_exists": ["my_app/src/main.rs"],
+        "check_command_output": ["cd my_app && cargo build 2>&1 || dir",""]
+      }
+    }
+  ]
+}

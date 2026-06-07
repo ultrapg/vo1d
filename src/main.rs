@@ -80,6 +80,9 @@ enum Commands {
         /// Manual mode: complete tasks yourself without an LLM model
         #[arg(long, default_value_t = false)]
         manual: bool,
+        /// Run all curricula in sequence (autotrain)
+        #[arg(long, short, default_value_t = false)]
+        all: bool,
     },
     /// Edit or view configuration
     Config,
@@ -187,10 +190,14 @@ async fn main() -> Result<()> {
         Some(Commands::Sessions) => {
             run_sessions(ctx).await?;
         }
-        Some(Commands::Train { curriculum, manual }) => {
-            match curriculum {
-                Some(name) => run_train(ctx, &name, manual).await?,
-                None => list_curricula(ctx).await?,
+        Some(Commands::Train { curriculum, manual, all }) => {
+            if all {
+                vo1d::agent::train::run_autotrain(ctx, manual).await?;
+            } else {
+                match curriculum {
+                    Some(name) => run_train(ctx, &name, manual).await?,
+                    None => list_curricula(ctx).await?,
+                }
             }
         }
         Some(Commands::Config) => {
@@ -270,35 +277,55 @@ async fn run_models(ctx: AppContext, action: Option<ModelAction>) -> Result<()> 
 }
 
 async fn list_curricula(ctx: AppContext) -> Result<()> {
-    let curricula_dir = find_curriculum_dir(&ctx);
-    let dir = match curricula_dir {
-        Some(d) => d,
-        None => {
-            println!("No curriculum directory found.");
-            println!("Place .json curriculum files in a 'curriculum/' folder next to the executable or in the current directory.");
-            return Ok(());
-        }
-    };
-
-    println!("Available curricula:");
-    let mut entries: Vec<_> = std::fs::read_dir(&dir)?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|x| x == "json").unwrap_or(false))
-        .collect();
-    entries.sort_by_key(|e| e.file_name());
-
-    for entry in &entries {
-        let name = entry.file_name().to_string_lossy().to_string();
-        let display = name.strip_suffix(".json").unwrap_or(&name).to_string();
-        if let Ok(content) = std::fs::read_to_string(entry.path()) {
-            if let Ok(curriculum) = serde_json::from_str::<serde_json::Value>(&content) {
-                let desc = curriculum.get("description").and_then(|d| d.as_str()).unwrap_or("");
-                let task_count = curriculum.get("tasks").and_then(|t| t.as_array()).map(|a| a.len()).unwrap_or(0);
-                println!("  {}  {}  ({} tasks)", display, desc, task_count);
-            } else {
-                println!("  {}  (invalid JSON)", display);
+    // Collect disk curricula
+    let mut disk_names: Vec<String> = Vec::new();
+    if let Some(dir) = find_curriculum_dir(&ctx) {
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if fname.ends_with(".json") {
+                    disk_names.push(fname.strip_suffix(".json").unwrap_or(&fname).to_string());
+                }
             }
         }
+    }
+
+    // Merge with embedded (deduped, embedded wins if no disk file)
+    use std::collections::BTreeSet;
+    let mut all: BTreeSet<String> = BTreeSet::new();
+    for name in vo1d::core::embedded_curricula::list() {
+        all.insert(name.to_string());
+    }
+    for name in &disk_names {
+        all.insert(name.clone());
+    }
+
+    if all.is_empty() {
+        println!("No curricula available.");
+        return Ok(());
+    }
+
+    println!("Available curricula:");
+    for name in &all {
+        let desc = if disk_names.contains(name) {
+            // Try to read from disk for description
+            if let Some(dir) = find_curriculum_dir(&ctx) {
+                let path = dir.join(format!("{}.json", name));
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(curriculum) = serde_json::from_str::<serde_json::Value>(&content) {
+                        curriculum.get("description").and_then(|d| d.as_str()).unwrap_or("").to_string()
+                    } else { String::new() }
+                } else { String::new() }
+            } else { String::new() }
+        } else {
+            // Parse from embedded
+            vo1d::core::embedded_curricula::get(name)
+                .and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+                .and_then(|v| v.get("description").and_then(|d| d.as_str()).map(|s| s.to_string()))
+                .unwrap_or_default()
+        };
+        let marker = if disk_names.contains(name) { "" } else { " (embedded)" };
+        println!("  {}{}  {}", name, marker, desc);
     }
     Ok(())
 }
@@ -335,38 +362,8 @@ fn find_curriculum_dir(ctx: &AppContext) -> Option<std::path::PathBuf> {
     None
 }
 
-fn resolve_curriculum_path(ctx: &AppContext, name: &str) -> Result<std::path::PathBuf> {
-    let curricula_dir = find_curriculum_dir(ctx)
-        .ok_or_else(|| anyhow::anyhow!("No curriculum directory found. Place .json curriculum files in a 'curriculum/' folder next to the executable or in the current directory."))?;
-
-    // Direct file path
-    let path = std::path::PathBuf::from(name);
-    if path.is_file() {
-        return Ok(path);
-    }
-
-    // Exact match
-    let exact = curricula_dir.join(format!("{}.json", name));
-    if exact.exists() {
-        return Ok(exact);
-    }
-
-    // Fuzzy match: search for files containing the name
-    let entries = std::fs::read_dir(&curricula_dir)?;
-    for entry in entries.flatten() {
-        let fname = entry.file_name().to_string_lossy().to_string();
-        if fname.contains(name) && fname.ends_with(".json") {
-            return Ok(entry.path());
-        }
-    }
-
-    anyhow::bail!("Curriculum '{}' not found in {}", name, curricula_dir.display())
-}
-
 async fn run_train(ctx: AppContext, curriculum: &str, manual: bool) -> Result<()> {
-    let curriculum_path = resolve_curriculum_path(&ctx, curriculum)?;
-    vo1d::agent::train::run_curriculum(ctx, &curriculum_path.to_string_lossy(), manual).await?;
-    Ok(())
+    vo1d::agent::train::run_curriculum_by_name(ctx, curriculum, manual).await
 }
 
 async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()> {

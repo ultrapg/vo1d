@@ -85,7 +85,7 @@ impl Default for Settings {
             llm: LlmConfig::default(),
             security: SecurityConfig::default(),
             default_mode: "interactive".to_string(),
-            default_model: "qwen25_1.5b".to_string(),
+            default_model: "qwen3_1.7b".to_string(),
             workspace_path: String::new(),
             network_whitelist: vec![],
             command_blacklist: vec![
