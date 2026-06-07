@@ -545,7 +545,7 @@ Tasks can include a `setup` field — shell commands that run in the sandbox **b
 
 ### Training Features
 
-- **Autotrain** (`--all` / `-a`): Run all 12 built-in curricula in sequence with automatic progression
+- **Autotrain** (`--all` / `-a`): Run all 13 built-in curricula in sequence with automatic progression
 - **Failure policy** (`--on-failure stop|skip|retry`): Control behavior when a curriculum fails
 - **Embedded curricula**: All curriculum JSON files are compiled into the binary — works even without the `curriculum/` folder on disk
 - **Manual mode** (`--manual`): Complete tasks yourself without an LLM model — the system prints each task, waits for you to create the files, then evaluates
