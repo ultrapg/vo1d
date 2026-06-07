@@ -136,6 +136,11 @@ async fn main() -> Result<()> {
         ctx.security.set_mode(security_mode);
     }
 
+    // Override default model if provided via CLI (global --model flag)
+    if let Some(ref model_id) = cli.model {
+        ctx.config.default_model = model_id.clone();
+    }
+
     // Override workspace if provided
     if let Some(ws) = cli.workspace {
         std::fs::create_dir_all(&ws)
