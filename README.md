@@ -15,7 +15,8 @@
 - **Training curriculum** — Progressive learning system with 6 curriculum files and task evaluation
 - **Self-correction system** — Failure tracking, error classification with tailored suggestions, auto-correction prompts after repeated failures
 - **Documentation-driven system prompt** — Markdown docs loaded at startup and injected into system prompt for better tool usage guidance
-- **Memory system** — Cross-session memory store with task history and learned patterns
+- **Learning memory system** — Cross-session memory that learns from successes and mistakes, stores solutions for future recall, and finds relevant past experiences by keyword similarity
+- **Self-improvement through training** — Training stores successful solutions and records mistakes as lessons; future tasks receive relevant past experiences injected into the prompt
 - **Audit logging** — Every action is logged with timestamps and security context
 - **Hardware profiling** — Auto-detects CPU/GPU/RAM and recommends compatible models
 - **Interactive REPL** — Chat-like interface for iterative task execution
@@ -459,8 +460,11 @@ Each task can have evaluation criteria (all fields accept arrays for multiple ch
 - **Manual mode** (`--manual`): Complete tasks yourself without an LLM model — the system prints each task, waits for you to create the files, then evaluates
 - **Sandboxed execution**: Each task runs in a clean sandbox directory
 - **Memory accumulation**: Task outcomes are stored in memory across the curriculum
+- **Solution storage**: Successful completions stored as solutions with keyword tags for future recall
+- **Mistake learning**: Failures recorded as mistakes with lessons and avoidance strategies
+- **Similar experience recall**: Before each task, memory is searched for similar past problems and their solutions/lessons are injected into the prompt
 - **Progress tracking**: Shows task-by-task progress with success/failure indicators
-- **Self-improvement**: Successful patterns are stored as learned patterns in memory
+- **Self-improvement**: Successful patterns are stored as learned patterns in memory, boosted on repeat success
 - **Detailed feedback**: Shows specific evaluation results for each task
 
 ### Built-in Curricula
@@ -474,19 +478,29 @@ Each task can have evaluation criteria (all fields accept arrays for multiple ch
 | `04_shell_basics` | Shell command usage | 3 tasks |
 | `05_web_basics` | Web search and fetch | 2 tasks |
 
-### Memory Integration
+### Memory & Learning Integration
 
-Train mode enhances the memory system by:
-- Adding completed tasks to task history
-- Storing successful patterns as learned patterns
-- Tracking outcomes and execution times
-- Providing context for future tasks in subsequent runs
+Train mode uses the full learning memory system:
+- **Solutions**: Successful task completions are stored with extracted keyword tags for future recall
+- **Mistakes**: Failures are recorded with what went wrong, the lesson learned, and how to avoid it
+- **Similar past experiences**: Before each task, the system searches memory for similar past problems and injects their solutions and lessons into the prompt
+- **Patterns**: Successful patterns are stored with confidence scores that increase on repeated success
+- **Task history**: Outcome and execution time tracked across the curriculum
 
 ---
 
 ## Self-Correction
 
-vo1d includes a multi-layered self-correction system that helps the model recover from errors autonomously.
+vo1d includes a multi-layered self-correction system that helps the model recover from errors autonomously and learns from them in persistent memory.
+
+### In-Memory Learning from Failures
+
+When an action fails 2+ times consecutively during execution, the error is automatically recorded as a **mistake** in persistent memory:
+- Stores what went wrong (action type + error message)
+- Stores the corrective suggestion
+- Tracks frequency so recurring issues are prioritized in the memory summary
+
+These learned mistakes are then surfaced via **similar past experience recall** during training and future tasks.
 
 ### Failure Tracking
 
@@ -569,6 +583,74 @@ model_name = ""
 
 ---
 
+## Memory System
+
+vo1d features a **learning memory system** that persists across sessions and improves over time.
+
+### What Is Stored
+
+| Store | Description | File |
+|-------|-------------|------|
+| **Task History** | Every task executed, with actions and outcome | `memory/task_history.json` |
+| **Patterns** | Learned patterns with confidence scores (boosted on reuse, capped at 50) | `memory/patterns.json` |
+| **Solutions** | Successful task solutions with keyword tags for similarity matching | `memory/solutions.json` |
+| **Mistakes** | Recorded failures with lessons learned and avoidance strategies (frequency-tracked) | `memory/mistakes.json` |
+| **Notes** | User-curated notes with tags | `memory/notes.json` |
+| **Preferences** | Key-value settings learned from user interaction | `memory/preferences.json` |
+
+### How Learning Works
+
+1. **During training**: Each task result is analyzed — successes are stored as solutions, failures as mistakes with lessons (e.g., "file not found" → "check the path exists before writing")
+2. **During execution**: If an action fails 2+ times consecutively, the error is automatically recorded as a mistake in persistent memory
+3. **During recall**: Before starting a task, the system searches stored solutions, mistakes, and notes for keyword overlap with the current task. Top matches are injected into the system prompt
+4. **Pattern reinforcement**: Repeated successes boost confidence scores on stored patterns; high-confidence patterns are shown in the memory summary
+
+### CLI Commands
+
+```bash
+# Show memory stats and recent entries
+vo1d memory
+vo1d memory list
+
+# View full detail of a specific memory by ID
+vo1d memory show sol_1718000000_123456789
+
+# Delete a specific memory by ID
+vo1d memory delete sol_1718000000_123456789
+
+# Clear all memories
+vo1d memory clear
+
+# Clear only a subset
+vo1d memory clear solutions
+vo1d memory clear mistakes
+vo1d memory clear notes
+vo1d memory clear patterns
+vo1d memory clear history
+
+# Add a custom note with optional tags
+vo1d memory add "Remember to check file paths before writing" --tags "files,writing,best-practice"
+```
+
+### Interactive REPL
+
+In chat mode, use `/memory` to view current memory stats and recent entries:
+
+```
+VO1D [interactive] >> /memory
+=== MEMORY ===
+Tasks: 12 | Patterns: 3 | Solutions: 5 | Mistakes: 2 | Notes: 1 | Preferences: 0
+
+Recent solutions:
+  Create hello.txt → passed
+  Write greeting.txt → passed
+
+Learned mistakes:
+  (freq:2) FAIL: File not found: data.txt
+```
+
+---
+
 ## Session System
 
 Every task execution creates a session with:
@@ -625,6 +707,7 @@ Commands:
   models    List and manage models
   sessions  List and manage saved sessions
   train     Run a training curriculum (e.g. `vo1d train 00_hello_world`)
+  memory    Manage VO1D's memory and learning
   config    View current configuration
   logs      View audit logs
 
@@ -645,6 +728,11 @@ Subcommands:
   models install <id>       Download and install a model
   models remove <id>        Remove an installed model
   models profile            Show hardware profile and compatible models
+  memory list               Show memory stats and entries
+  memory show <id>          Show a specific memory by ID
+  memory delete <id>        Delete a specific memory by ID
+  memory clear [type]       Clear memories (all, solutions, mistakes, notes, patterns, history)
+  memory add <content>      Add a custom note (--tags for comma-separated tags)
 ```
 
 ---
@@ -695,17 +783,17 @@ The profiler checks:
                         └──┬───────┬──────┬───┘
                            │       │      │
                     ┌──────▼──┐ ┌──▼──────▼──┐
-                    │   LLM   │ │  Tool      │
+                    │  LLM   │ │  Tool      │
                     │ Backend │ │  System    │
                     └─────────┘ │  (registry)│
-                                └──┬─────────┘
-                                   │
-                        ┌──────────▼──────────┐
-                        │  Tool Executors     │
-                        │ (file, cmd, http,   │
-                        │  web_search,        │
-                        │  web_fetch)         │
-                        └─────────────────────┘
+                               └──┬─────────┘
+                                  │
+                       ┌──────────▼──────────┐
+                       │  Tool Executors     │
+                       │ (file, cmd, http,   │
+                       │  web_search,        │
+                       │  web_fetch)         │
+                       └─────────────────────┘
 ```
 
 ### Component Details
