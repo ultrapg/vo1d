@@ -6,3 +6,4 @@ pub mod compression;
 pub mod curriculum;
 pub mod self_correction;
 pub mod error_suggestions;
+pub mod docs;

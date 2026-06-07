@@ -7,7 +7,7 @@
       "description": "Use shell commands (not write_file) to create a file called shell_test.txt with content 'Created via shell'. Then use another command to display its contents.",
       "expected_outcome": "shell_test.txt exists with the correct content",
       "evaluation": {
-        "check_file_exists": "shell_test.txt",
+        "check_file_exists": ["shell_test.txt"],
         "check_file_content": ["shell_test.txt::Created via shell"]
       }
     },
@@ -16,8 +16,7 @@
       "description": "Create a file named poem.txt with at least 20 words of text. Use a shell command to count the words and write just the count to wordcount.txt.",
       "expected_outcome": "poem.txt exists and wordcount.txt contains a number",
       "evaluation": {
-        "check_file_exists": "poem.txt",
-        "check_file_exists": "wordcount.txt"
+        "check_file_exists": ["poem.txt", "wordcount.txt"]
       }
     },
     {
@@ -25,8 +24,7 @@
       "description": "Create a file named data.csv with these lines: 'name,age\nAlice,30\nBob,25\nCharlie,35'. Use a shell command to sort the lines (excluding header) by age and write the sorted result to sorted.csv.",
       "expected_outcome": "sorted.csv exists with data sorted by age",
       "evaluation": {
-        "check_file_exists": "data.csv",
-        "check_file_exists": "sorted.csv"
+        "check_file_exists": ["data.csv", "sorted.csv"]
       }
     }
   ]

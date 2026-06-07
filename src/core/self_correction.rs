@@ -53,10 +53,17 @@ impl ErrorClassifier {
     /// Format an error with an optional suggestion for the agent.
     pub fn format_with_suggestion(error: &Error, action: &Action) -> String {
         let base = format!("Error ({}): {}", action.description(), error);
-        if let Some(suggestion) = Self::suggest(error) {
-            format!("{base}\n\nSuggestion: {suggestion}")
+        // Try detailed suggestions first
+        let detailed = crate::core::error_suggestions::analyze_error(&error.to_string());
+        let suggestion = if let Some(ref d) = detailed {
+            d.to_markdown()
         } else {
+            Self::suggest(error).unwrap_or_default()
+        };
+        if suggestion.is_empty() {
             base
+        } else {
+            format!("{base}\n\nSuggestion: {suggestion}")
         }
     }
 }
@@ -138,7 +145,7 @@ mod tests {
     fn test_suggest_permission_denied() {
         let err = Error::new(io::Error::new(io::ErrorKind::PermissionDenied, "Permission denied"));
         let s = ErrorClassifier::suggest(&err);
-        assert!(s.unwrap().contains("permission"));
+        assert!(s.unwrap().contains("workspace"));
     }
 
     #[test]

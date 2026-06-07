@@ -7,7 +7,7 @@
       "description": "First create a file named log.txt with content 'Start'. Then append ' Middle' to it. Then append ' End' to it. The final file should contain 'Start Middle End'.",
       "expected_outcome": "log.txt contains 'Start Middle End'",
       "evaluation": {
-        "check_file_exists": "log.txt",
+        "check_file_exists": ["log.txt"],
         "check_file_content": ["log.txt::Start Middle End"]
       }
     },
@@ -16,7 +16,7 @@
       "description": "Create a file named source.txt with content 'Copy me'. Then copy it to destination.txt. Both files should exist with the same content.",
       "expected_outcome": "source.txt and destination.txt both exist with identical content",
       "evaluation": {
-        "check_file_exists": "source.txt",
+        "check_file_exists": ["source.txt"],
         "check_file_content": ["source.txt::Copy me", "destination.txt::Copy me"]
       }
     },
@@ -25,7 +25,7 @@
       "description": "Create a file named data.txt with any content. Use the file_metadata action to check its size. Then write the size (in bytes) to a file called size.txt.",
       "expected_outcome": "data.txt exists and size.txt contains the file size",
       "evaluation": {
-        "check_file_exists": "data.txt"
+        "check_file_exists": ["data.txt"]
       }
     }
   ]

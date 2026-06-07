@@ -7,8 +7,8 @@
       "description": "Create a directory called 'projects'. Inside it, create a file named 'readme.md' with content '# My Project'. Then list the contents of the 'projects' directory to verify the file is there.",
       "expected_outcome": "projects/readme.md exists and directory listing shows it",
       "evaluation": {
-        "check_file_exists": "projects/readme.md",
-        "check_directory_exists": "projects"
+        "check_file_exists": ["projects/readme.md"],
+        "check_directory_exists": ["projects"]
       }
     },
     {
@@ -16,11 +16,8 @@
       "description": "Create the following directory structure: src/main.rs, src/lib.rs, tests/test1.rs. Each file should contain a simple Rust-style comment like '// main module'.",
       "expected_outcome": "Nested directory structure exists with all files",
       "evaluation": {
-        "check_directory_exists": "src",
-        "check_directory_exists": "tests",
-        "check_file_exists": "src/main.rs",
-        "check_file_exists": "src/lib.rs",
-        "check_file_exists": "tests/test1.rs"
+        "check_directory_exists": ["src", "tests"],
+        "check_file_exists": ["src/main.rs", "src/lib.rs", "tests/test1.rs"]
       }
     },
     {
@@ -28,7 +25,7 @@
       "description": "Create a directory called 'temp_stuff' with 3 files inside it: a.txt, b.txt, c.txt. List the directory. Then delete all 3 files using a pattern. List the directory again to confirm it's empty.",
       "expected_outcome": "temp_stuff directory exists but is empty",
       "evaluation": {
-        "check_directory_exists": "temp_stuff"
+        "check_directory_exists": ["temp_stuff"]
       }
     }
   ]

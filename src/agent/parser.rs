@@ -145,6 +145,22 @@ impl ToolParser {
             });
         }
 
+        // Pattern: "web search: query" (must be before "search:" to avoid collision)
+        if let Some(query) = self.extract_after_prefix(&lower, &["web search:", "search web:", "search for:"]) {
+            return Some(Action::WebSearch {
+                query: query.trim().to_string(),
+                num_results: None,
+            });
+        }
+
+        // Pattern: "web fetch: url"
+        if let Some(url) = self.extract_after_prefix(&lower, &["web fetch:", "fetch url:", "fetch:"]) {
+            return Some(Action::WebFetch {
+                url: url.trim().to_string(),
+                max_chars: None,
+            });
+        }
+
         // Pattern: "search: pattern"
         if let Some(pat) = self.extract_after_prefix(&lower, &["search:", "find:", "glob:"]) {
             return Some(Action::SearchFiles {
@@ -183,22 +199,6 @@ impl ToolParser {
         if let Some(path) = self.extract_after_prefix(&lower, &["file metadata:", "metadata:", "stat:", "file info:"]) {
             return Some(Action::FileMetadata {
                 path: path.trim().to_string(),
-            });
-        }
-
-        // Pattern: "web search: query"
-        if let Some(query) = self.extract_after_prefix(&lower, &["web search:", "search web:", "search for:"]) {
-            return Some(Action::WebSearch {
-                query: query.trim().to_string(),
-                num_results: None,
-            });
-        }
-
-        // Pattern: "web fetch: url"
-        if let Some(url) = self.extract_after_prefix(&lower, &["web fetch:", "fetch url:", "fetch:"]) {
-            return Some(Action::WebFetch {
-                url: url.trim().to_string(),
-                max_chars: None,
             });
         }
 

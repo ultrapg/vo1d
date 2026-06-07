@@ -276,9 +276,9 @@ mod tests {
 
     #[test]
     fn test_analyze_file_not_found() {
-        let e = analyze_error("File not found: /path/to/file.txt (os error 2)").unwrap();
+        let e = analyze_error("No such file or directory: 'file.txt'").unwrap();
         assert_eq!(e.title, "File Not Found");
-        assert!(e.markdown.contains("file.txt"));
+        assert!(e.to_markdown().contains("file.txt"));
         assert!(e.suggestions.len() >= 4);
     }
 

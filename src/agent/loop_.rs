@@ -292,14 +292,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     Ok(session)
 }
 
-fn compress_conversation(conv: &mut Vec<Message>) {
-    let compressor = crate::core::compression::ContextCompressor::new(
-        crate::core::compression::CompressionConfig::default()
-    );
-    let (compressed, _) = compressor.compress(conv, 4096); // context_size placeholder
-    *conv = compressed;
-}
-
 fn clean_reasoning(text: &str) -> String {
     let mut s = text.to_string();
     for label in &["STEP 1 — REASON", "STEP 2 — ACTION", "STEP 1 —", "STEP 2 —"] {
@@ -342,6 +334,9 @@ fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String 
         Ok(m) => m.to_context_string(),
         Err(_) => String::new(),
     };
+
+    let doc_provider = crate::core::docs::DocProvider::load(&ctx.paths.root_dir().join("docs"));
+    let doc_context = doc_provider.to_context_string();
 
     let tool_docs = format!(
         r#"AVAILABLE ACTIONS:
@@ -456,11 +451,11 @@ RULES:
 - All paths are relative to: {ws}
 - OS: {os} — use {shell} syntax for shell commands
 - Current mode: {mode}
-- Use "pattern": "*" (not "*.*") to match ALL files{memory}"#,
+- Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
             mode = mode, ws = ws,
             conversational_note = conversational_note,
             tool_docs = tool_docs, tool_instructions = tool_instructions,
-            os = os_hint, shell = shell_hint, memory = memory_context,
+            os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
         )
     } else {
         let tool_instructions_sim = r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
@@ -500,11 +495,11 @@ RULES:
 - All paths are relative to: {ws}
 - OS: {os} — use {shell} syntax for shell commands
 - Current mode: {mode}
-- Use "pattern": "*" (not "*.*") to match ALL files{memory}"#,
+- Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
             mode = mode, ws = ws,
             conversational_note = conversational_note,
             tool_docs = tool_docs, tool_instructions_sim = tool_instructions_sim,
-            os = os_hint, shell = shell_hint, memory = memory_context,
+            os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
         )
     }
 }

@@ -7,7 +7,7 @@
       "description": "Create a file named hello.txt in the sandbox directory containing the text 'Hello, World!'",
       "expected_outcome": "hello.txt exists with content 'Hello, World!'",
       "evaluation": {
-        "check_file_exists": "hello.txt",
+        "check_file_exists": ["hello.txt"],
         "check_file_content": ["hello.txt::Hello, World!"]
       }
     },
@@ -16,7 +16,7 @@
       "description": "Create a file named greeting.txt containing 'Welcome to VO1D training'",
       "expected_outcome": "greeting.txt exists with the greeting message",
       "evaluation": {
-        "check_file_exists": "greeting.txt",
+        "check_file_exists": ["greeting.txt"],
         "check_file_content": ["greeting.txt::Welcome to VO1D training"]
       }
     },
@@ -25,7 +25,7 @@
       "description": "Create a file named info.txt with at least 3 lines of text about what VO1D can do",
       "expected_outcome": "info.txt exists with multi-line content about VO1D",
       "evaluation": {
-        "check_file_exists": "info.txt",
+        "check_file_exists": ["info.txt"],
         "check_file_content": ["info.txt::VO1D"]
       }
     }

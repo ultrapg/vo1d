@@ -7,7 +7,7 @@
       "description": "Use the web_search action to search for 'Rust programming language features'. Write the top result's title and URL to search_result.txt.",
       "expected_outcome": "search_result.txt exists with web search results",
       "evaluation": {
-        "check_file_exists": "search_result.txt"
+        "check_file_exists": ["search_result.txt"]
       }
     },
     {
@@ -15,7 +15,7 @@
       "description": "Use web_fetch to fetch the content from 'https://example.com'. Save the fetched markdown content to fetched_page.txt.",
       "expected_outcome": "fetched_page.txt exists with web content",
       "evaluation": {
-        "check_file_exists": "fetched_page.txt"
+        "check_file_exists": ["fetched_page.txt"]
       }
     }
   ]

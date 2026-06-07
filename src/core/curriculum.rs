@@ -5,13 +5,17 @@ use std::path::Path;
 /// Criteria for evaluating whether a task was completed successfully.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvaluationCriteria {
-    /// File must exist at this path
-    pub check_file_exists: Option<String>,
-    /// File must exist and contain this text
+    /// Files that must exist
+    #[serde(default)]
+    pub check_file_exists: Option<Vec<String>>,
+    /// File content checks: "path::expected text"
+    #[serde(default)]
     pub check_file_content: Option<Vec<String>>,
-    /// Directory must exist at this path
-    pub check_directory_exists: Option<String>,
-    /// Command must exit 0 and output contain this string
+    /// Directories that must exist
+    #[serde(default)]
+    pub check_directory_exists: Option<Vec<String>>,
+    /// Command output checks: "command::expected text"
+    #[serde(default)]
     pub check_command_output: Option<Vec<String>>,
 }
 
@@ -33,14 +37,12 @@ pub struct Curriculum {
 }
 
 impl Curriculum {
-    /// Load a curriculum from a JSON file path.
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let content = std::fs::read_to_string(path.as_ref())?;
         let curriculum: Curriculum = serde_json::from_str(&content)?;
         Ok(curriculum)
     }
 
-    /// The total number of tasks in this curriculum.
     pub fn task_count(&self) -> usize {
         self.tasks.len()
     }
@@ -55,19 +57,20 @@ pub struct EvaluationResult {
     pub outcome: String,
 }
 
-/// Evaluate a task against its criteria by examining the sandbox directory.
 pub fn evaluate_task(task: &TaskDefinition, sandbox_dir: &Path) -> EvaluationResult {
     let mut passed = true;
     let mut details = Vec::new();
 
     if let Some(ref criteria) = task.evaluation {
-        if let Some(ref path) = criteria.check_file_exists {
-            let full = sandbox_dir.join(path);
-            if full.exists() && full.is_file() {
-                details.push(format!("File exists: {}", path));
-            } else {
-                details.push(format!("FAIL: File not found: {}", path));
-                passed = false;
+        if let Some(ref paths) = criteria.check_file_exists {
+            for path in paths {
+                let full = sandbox_dir.join(path);
+                if full.exists() && full.is_file() {
+                    details.push(format!("File exists: {}", path));
+                } else {
+                    details.push(format!("FAIL: File not found: {}", path));
+                    passed = false;
+                }
             }
         }
 
@@ -91,13 +94,15 @@ pub fn evaluate_task(task: &TaskDefinition, sandbox_dir: &Path) -> EvaluationRes
             }
         }
 
-        if let Some(ref path) = criteria.check_directory_exists {
-            let full = sandbox_dir.join(path);
-            if full.exists() && full.is_dir() {
-                details.push(format!("Directory exists: {}", path));
-            } else {
-                details.push(format!("FAIL: Directory not found: {}", path));
-                passed = false;
+        if let Some(ref dirs) = criteria.check_directory_exists {
+            for path in dirs {
+                let full = sandbox_dir.join(path);
+                if full.exists() && full.is_dir() {
+                    details.push(format!("Directory exists: {}", path));
+                } else {
+                    details.push(format!("FAIL: Directory not found: {}", path));
+                    passed = false;
+                }
             }
         }
 
@@ -177,7 +182,7 @@ mod tests {
             description: "Create test.txt".to_string(),
             expected_outcome: "File created".to_string(),
             evaluation: Some(EvaluationCriteria {
-                check_file_exists: Some("test.txt".to_string()),
+                check_file_exists: Some(vec!["test.txt".to_string()]),
                 check_file_content: None,
                 check_directory_exists: None,
                 check_command_output: None,
@@ -195,7 +200,7 @@ mod tests {
             description: "Create missing.txt".to_string(),
             expected_outcome: "File created".to_string(),
             evaluation: Some(EvaluationCriteria {
-                check_file_exists: Some("missing.txt".to_string()),
+                check_file_exists: Some(vec!["missing.txt".to_string()]),
                 check_file_content: None,
                 check_directory_exists: None,
                 check_command_output: None,
@@ -237,7 +242,7 @@ mod tests {
             evaluation: Some(EvaluationCriteria {
                 check_file_exists: None,
                 check_file_content: None,
-                check_directory_exists: Some("subdir".to_string()),
+                check_directory_exists: Some(vec!["subdir".to_string()]),
                 check_command_output: None,
             }),
         };
