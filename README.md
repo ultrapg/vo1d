@@ -13,6 +13,8 @@
 - **File & shell tools** — Complete file operations, command execution, directory management, HTTP requests
 - **Context compression** — Opencode-style two-phase pruning & compacting (prune oversized tool outputs + compact old messages)
 - **Training curriculum** — Progressive learning system with 6 curriculum files and task evaluation
+- **Self-correction system** — Failure tracking, error classification with tailored suggestions, auto-correction prompts after repeated failures
+- **Documentation-driven system prompt** — Markdown docs loaded at startup and injected into system prompt for better tool usage guidance
 - **Memory system** — Cross-session memory store with task history and learned patterns
 - **Audit logging** — Every action is logged with timestamps and security context
 - **Hardware profiling** — Auto-detects CPU/GPU/RAM and recommends compatible models
@@ -43,7 +45,10 @@ vo1d/
 │   │   ├── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
 │   │   ├── memory.rs       # Cross-session memory store
 │   │   ├── compression.rs  # Context compression (prune+compact)
-│   │   └── curriculum.rs   # Curriculum evaluation & loading
+│   │   ├── curriculum.rs   # Curriculum evaluation & loading
+│   │   ├── docs.rs         # Markdown documentation provider for system prompt
+│   │   ├── self_correction.rs   # FailureTracker & ErrorClassifier
+│   │   └── error_suggestions.rs # Detailed error analysis with markdown suggestions
 │   ├── llm/                # LLM backends
 │   ├── tools/              # Tool system
 │   │   ├── mod.rs          # Module exports
@@ -173,16 +178,17 @@ vo1d train curriculum/my_custom_curriculum.json
 
 vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **context compression**:
 
-1. **System prompt** is constructed with current mode, workspace path, memory context, and available tools
+1. **System prompt** is constructed with current mode, workspace path, memory context, available tools, **and markdown documentation** (loaded from `docs/`)
 2. **User task** is appended as a message (ChatML format: `<|im_start|>system` / `<|im_start|>user` / `<|im_start|>assistant`)
 3. **Model generates** a response containing a JSON action block
-4. **Parser extracts** the JSON action (e.g. `{"action": "web_search", "query": "rust programming"}`)
+4. **Parser extracts** the JSON action (e.g. `{"action": "web_search", "query": "rust programming"}`) from plain JSON, markdown code blocks, or heuristic patterns
 5. **Security policy** evaluates the action against the current mode
 6. **Action is executed** and the result (or error) is appended to the conversation
-7. **Context compression** occurs if conversation exceeds ~80% of context limit:
-   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 chars)
-   - **Phase 2 (Compact)**: Keep system prompt, user task, and recent messages; compress old sections
-8. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
+7. **Self-correction** checks for repeated failures per action type (≥3 consecutive → auto-correction prompt injected in next iteration)
+8. **Context compression** occurs if conversation exceeds ~80% of context limit:
+   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 chars) with length markers
+   - **Phase 2 (Compact)**: Keep system prompt, user task, and recent messages; compress old sections into summary markers
+9. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
 
 ```
   User input → [System Prompt + Conversation] → LLM → JSON Action
@@ -424,8 +430,10 @@ Curricula are JSON files with this structure:
       "description": "Create a file named hello.txt with content 'Hello, World!'",
       "expected_outcome": "hello.txt exists with content 'Hello, World!'",
       "evaluation": {
-        "check_file_exists": "hello.txt",
-        "check_file_content": ["hello.txt::Hello, World!"]
+        "check_file_exists": ["hello.txt"],
+        "check_file_content": ["hello.txt::Hello, World!"],
+        "check_directory_exists": ["src", "tests"],
+        "check_command_output": ["dir /b::hello.txt"]
       }
     }
   ]
@@ -434,11 +442,11 @@ Curricula are JSON files with this structure:
 
 ### Task Evaluation
 
-Each task can have evaluation criteria:
-- `check_file_exists`: File must exist at specified path
-- `check_file_content`: File must contain specified text(s)
-- `check_directory_exists`: Directory must exist at specified path
-- `check_command_output`: Command output must contain specified text(s)
+Each task can have evaluation criteria (all fields accept arrays for multiple checks):
+- `check_file_exists`: Files that must exist at specified paths
+- `check_file_content`: File content checks in `"path::expected text"` format
+- `check_directory_exists`: Directories that must exist at specified paths
+- `check_command_output`: Command output checks in `"command::expected text"` format
 
 ### Training Features
 
@@ -466,6 +474,61 @@ Train mode enhances the memory system by:
 - Storing successful patterns as learned patterns
 - Tracking outcomes and execution times
 - Providing context for future tasks in subsequent runs
+
+---
+
+## Self-Correction
+
+vo1d includes a multi-layered self-correction system that helps the model recover from errors autonomously.
+
+### Failure Tracking
+
+The `FailureTracker` records consecutive failures per action type. When an action fails 3 times in a row, the agent loop injects a correction prompt on the next iteration:
+
+```
+The action "read_file" has failed 3 times in a row. Previous errors:
+• File not found: missing.txt
+• File not found: missing.txt
+• File not found: missing.txt
+
+Suggestions:
+- Check that the file path is correct and relative to the workspace
+- Use list_directory to verify the file exists before reading
+- Try an alternative path or glob pattern
+```
+
+### Error Classification
+
+The `ErrorClassifier` categorizes errors (file not found, permission denied, timeout, etc.) and provides targeted suggestions. These are used both in correction prompts and in the error output shown to the model after each failed action.
+
+### Detailed Error Suggestions
+
+When `format_with_suggestion()` is called on an error, it delegates to `error_suggestions::analyze_error()` which produces rich markdown output:
+
+```markdown
+### File Not Found
+**Error:** No such file or directory: 'missing.txt'
+
+**Likely Cause:** The specified file path does not exist.
+
+**Suggested Fix:**
+- Use `list_directory` to verify the file exists
+- Check that the path is relative to the workspace root
+- Verify the filename spelling and extension
+
+**Prevention:**
+- Use `search_files` with a glob pattern before reading
+- Confirm the workspace path with `list_directory`
+```
+
+### Documentation-Driven System Prompt
+
+The `DocProvider` loads markdown files from the `docs/` directory at startup and injects them into the system prompt. This provides the model with detailed reference documentation for tool usage, file operations, and self-improvement strategies — without hardcoding everything into the prompt template.
+
+Current docs:
+- `docs/file-ops.md` — File read/write/append/copy/delete patterns
+- `docs/directory-ops.md` — Directory creation, listing, navigation
+- `docs/self-improvement.md` — Learning from errors, retry strategies, memory usage
 
 ---
 
@@ -554,6 +617,7 @@ Commands:
   chat      Start an interactive chat session
   models    List and manage models
   sessions  List and manage saved sessions
+  train     Run a training curriculum (e.g. `vo1d train 00_hello_world`)
   config    View current configuration
   logs      View audit logs
 
@@ -617,30 +681,37 @@ The profiler checks:
                         │     CLI      │
                         └──────┬───────┘
                                │
-                        ┌──────▼───────┐
-                        │  Agent Loop  │
-                        │  (ReAct)     │
-                        └──┬───────┬───┘
-                           │       │
-                    ┌──────▼──┐ ┌──▼──────────┐
-                    │  LLM   │ │  Tool System │
-                    │ Backend │ │  (registry)  │
-                    └─────────┘ └──┬───────────┘
-                                   │
-                        ┌──────────▼──────────┐
-                        │  Tool Executors     │
-                        │ (file, cmd, http…)  │
-                        └─────────────────────┘
+                        ┌──────▼──────────────┐
+                        │    Agent Loop       │
+                        │  (ReAct + Compress  │
+                        │   + Self-Correct)   │
+                        └──┬───────┬──────┬───┘
+                           │       │      │
+                    ┌──────▼──┐ ┌──▼──────▼──┐
+                    │  LLM   │ │  Tool      │
+                    │ Backend │ │  System    │
+                    └─────────┘ │  (registry)│
+                               └──┬─────────┘
+                                  │
+                       ┌──────────▼──────────┐
+                       │  Tool Executors     │
+                       │ (file, cmd, http,   │
+                       │  web_search,        │
+                       │  web_fetch)         │
+                       └─────────────────────┘
 ```
 
 ### Component Details
 
-- **CLI**: Entry point. Clap argument parser dispatches to `vo1d task` or `vo1d chat`.
-- **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry. Cloned per task.
-- **Agent Loop**: Iterates up to `max_iterations`. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended to conversation.
+- **CLI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or `vo1d train`.
+- **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider. Cloned per task.
+- **Agent Loop**: Iterates up to `max_iterations`. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → context compression if needed.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Current implementations: `builtin` (llama.cpp via `llama-cpp-2`). Backends are pluggable.
-- **Tool System**: Registry of available tools. Each tool is a function that takes an `Action` and returns a `Result<String>`.
+- **Tool System**: Registry of 14 available tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown).
 - **Security Manager**: Evaluates each action against the current mode. Can approve, ask, or block. All decisions are audited.
+- **Doc Provider**: Loads markdown documentation from `docs/` and injects into system prompt for better tool usage guidance.
+- **Self-Correction**: `FailureTracker` monitors consecutive failures per action type; `ErrorClassifier` and `error_suggestions` produce detailed markdown suggestions.
+- **Context Compressor**: Two-phase pruning + compacting when conversation exceeds ~80% of context limit.
 
 ---
 
@@ -665,6 +736,9 @@ vo1d is designed to be fully portable:
 ```bash
 # Run all unit tests
 cargo test
+
+# Run integration tests
+cargo test --test integration
 
 # Run tests with a specific feature
 cargo test --features llamacpp-builtin
