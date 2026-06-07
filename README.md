@@ -70,7 +70,8 @@ vo1d/
     ├── config/             # Configuration
     │   ├── settings.rs     # Settings structs with serde defaults
     │   └── mod.rs          # Load/save settings.toml
-    ├── ui/                 # User interfaces │   │   └── cli.rs          # CLI REPL and output helpers
+    ├── ui/                 # User interfaces
+    │   └── cli.rs          # CLI REPL and output helpers
     ├── models/             # Data models
     │   ├── message.rs      # Message, LlmResponse, TokenUsage
     │   ├── action.rs       # Action enum (all tool actions)
