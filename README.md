@@ -30,59 +30,58 @@
 ```
 vo1d/
 ├── Cargo.toml              # Workspace root with feature flags
-├── src/
-│   ├── main.rs             # CLI entry point (clap parser)
-│   ├── lib.rs              # AppContext initialization
-│   ├── agent/              # ReAct agent loop
-│   │   ├── loop_.rs        # Main agent iteration loop
-│   │   ├── parser.rs       # JSON action parser (extracts ```json blocks)
-│   │   ├── planner.rs      # High-level plan generation
-│   │   ├── executor.rs     # Tool execution dispatch
-│   │   ├── session.rs      # Session state, save/resume
-│   │   ├── checkpoint.rs   # Iteration checkpointing
-│   │   └── train.rs        # Training curriculum system
-│   ├── core/               # Core utilities
-│   │   ├── paths.rs        # Vo1dPaths (portable directory resolver)
-│   │   ├── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
-│   │   ├── memory.rs       # Cross-session memory store
-│   │   ├── compression.rs  # Context compression (prune+compact)
-│   │   ├── curriculum.rs   # Curriculum evaluation & loading
-│   │   ├── docs.rs         # Markdown documentation provider for system prompt
-│   │   ├── self_correction.rs   # FailureTracker & ErrorClassifier
-│   │   └── error_suggestions.rs # Detailed error analysis with markdown suggestions
-│   ├── llm/                # LLM backends
-│   ├── tools/              # Tool system
-│   │   ├── mod.rs          # Module exports
-│   │   ├── registry.rs     # Tool registry (tool metadata)
-│   │   ├── files.rs        # File operations
-│   │   ├── shell.rs        # Shell command execution
-│   │   ├── web.rs          # HTTP request tool
-│   │   ├── web_search.rs   # Web search (DuckDuckGo)
-│   │   ├── web_fetch.rs    # Web page fetch & HTML→markdown
-│   │   └── schema.rs       # JSON schema helpers
-│   ├── security/           # Security & policy system
-│   │   ├── modes.rs        # SecurityMode enum
-│   │   ├── policy.rs       # Policy evaluation engine
-│   │   ├── approval.rs     # Interactive approval prompts
-│   │   ├── audit.rs        # JSONL audit logging
-│   │   ├── privilege.rs    # Windows privilege escalation
-│   │   └── sandbox.rs      # Workspace sandbox enforcement
-│   ├── config/             # Configuration
-│   │   ├── settings.rs     # Settings structs with serde defaults
-│   │   └── mod.rs          # Load/save settings.toml
-│   ├── ui/                 # User interfaces
-│   │   └── cli.rs          # CLI REPL and output helpers
-│   ├── models/             # Data models
-│   │   ├── message.rs      # Message, LlmResponse, TokenUsage
-│   │   ├── action.rs       # Action enum (all tool actions)
-│   │   └── tool.rs         # Tool definition
-│   ├── core/               # Core utilities
-│   │   ├── paths.rs        # Vo1dPaths (portable directory resolver)
-│   │   └── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
-│   └── utils/              # Misc utilities
-│       ├── crypto.rs       # SHA256 hashing
-│       ├── time.rs         # Timestamp formatting
-│       └── stderr_guard.rs # stderr suppression for llama.cpp
+└── src/
+    ├── main.rs             # CLI entry point (clap parser)
+    ├── lib.rs              # AppContext initialization
+    ├── agent/              # ReAct agent loop
+    │   ├── loop_.rs        # Main agent iteration loop
+    │   ├── parser.rs       # JSON action parser (extracts ```json blocks)
+    │   ├── planner.rs      # High-level plan generation
+    │   ├── executor.rs     # Tool execution dispatch
+    │   ├── session.rs      # Session state, save/resume
+    │   ├── checkpoint.rs   # Iteration checkpointing
+    │   └── train.rs        # Training curriculum system
+    ├── core/               # Core utilities
+    │   ├── paths.rs        # Vo1dPaths (portable directory resolver)
+    │   ├── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
+    │   ├── memory.rs       # Cross-session memory store
+    │   ├── compression.rs  # Context compression (prune+compact)
+    │   ├── curriculum.rs   # Curriculum evaluation & loading
+    │   ├── docs.rs         # Markdown documentation provider for system prompt
+    │   ├── self_correction.rs   # FailureTracker & ErrorClassifier
+    │   └── error_suggestions.rs # Detailed error analysis with markdown suggestions
+    ├── llm/                # LLM backends
+    ├── tools/              # Tool system
+    │   ├── mod.rs          # Module exports
+    │   ├── registry.rs     # Tool registry (tool metadata)
+    │   ├── files.rs        # File operations
+    │   ├── shell.rs        # Shell command execution
+    │   ├── web.rs          # HTTP request tool
+    │   ├── web_search.rs   # Web search (DuckDuckGo)
+    │   ├── web_fetch.rs    # Web page fetch & HTML→markdown
+    │   └── schema.rs       # JSON schema helpers
+    ├── security/           # Security & policy system
+    │   ├── modes.rs        # SecurityMode enum
+    │   ├── policy.rs       # Policy evaluation engine
+    │   ├── approval.rs     # Interactive approval prompts
+    │   ├── audit.rs        # JSONL audit logging
+    │   ├── privilege.rs    # Windows privilege escalation
+    │   └── sandbox.rs      # Workspace sandbox enforcement
+    ├── config/             # Configuration
+    │   ├── settings.rs     # Settings structs with serde defaults
+    │   └── mod.rs          # Load/save settings.toml
+    ├── ui/                 # User interfaces │   │   └── cli.rs          # CLI REPL and output helpers
+    ├── models/             # Data models
+    │   ├── message.rs      # Message, LlmResponse, TokenUsage
+    │   ├── action.rs       # Action enum (all tool actions)
+    │   └── tool.rs         # Tool definition
+    ├── core/               # Core utilities
+    │   ├── paths.rs        # Vo1dPaths (portable directory resolver)
+    │   └── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
+    └── utils/              # Misc utilities
+        ├── crypto.rs       # SHA256 hashing
+        ├── time.rs         # Timestamp formatting
+        └── stderr_guard.rs # stderr suppression for llama.cpp
 ```
 
 ---
