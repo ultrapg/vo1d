@@ -201,6 +201,29 @@ impl ToolRegistry {
             }),
         });
 
+        tools.insert("show_changes".to_string(), ToolInfo {
+            name: "show_changes",
+            description: "Show all file changes made in the current session. Lists modified files and their diffs using git. Useful for reviewing what has been changed before finishing a task.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Optional path to a specific file or directory to check (default: workspace root)" }
+                }
+            }),
+        });
+
+        tools.insert("restore_backup".to_string(), ToolInfo {
+            name: "restore_backup",
+            description: "Restore a file to its original state from git version control. Reverts all uncommitted changes to the specified file. Use git checkout or git restore internally.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Path to the file to restore" }
+                },
+                "required": ["path"]
+            }),
+        });
+
         Self { tools }
     }
 

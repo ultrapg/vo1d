@@ -18,6 +18,8 @@ pub struct Settings {
     pub network_whitelist: Vec<String>,
     /// Command blacklist patterns
     pub command_blacklist: Vec<String>,
+    /// Default behavioral mode (normal, fix, research, refactor, tdd)
+    pub default_behavior: String,
     /// Maximum plan iterations before forced halt
     pub max_iterations: u32,
     /// Default command timeout in seconds
@@ -101,6 +103,7 @@ impl Default for Settings {
                 "shutdown".to_string(),
                 "reboot".to_string(),
             ],
+            default_behavior: "normal".to_string(),
             max_iterations: 50,
             command_timeout_secs: 60,
             max_backups: 10,

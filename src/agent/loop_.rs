@@ -1,16 +1,19 @@
 use crate::agent::executor::ToolExecutor;
 use crate::agent::parser::ToolParser;
+use crate::agent::plan_parser::PlanParser;
 use crate::agent::planner::Planner;
 use crate::agent::session::Session;
 use crate::core::self_correction::{ErrorClassifier, FailureTracker};
 use crate::AppContext;
 use crate::models::action::Action;
 use crate::models::message::Message;
+use crate::models::plan::Plan;
 use crate::security::policy::PolicyResult;
 use crate::tools::registry::ToolRegistry;
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use regex::Regex;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -21,6 +24,11 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     let tool_parser = ToolParser::new();
     let _planner = Planner::new(ctx.config.max_iterations);
     let mut failure_tracker = FailureTracker::new();
+    let mut plan: Option<Plan> = None;
+    let current_step: usize = 0;
+    let mut step_iterations: HashMap<u32, u32> = HashMap::new();
+    let mut step_failures: HashMap<u32, u32> = HashMap::new();
+    let plan_checked = std::cell::Cell::new(false);
 
     let model_id = ctx.config.default_model.clone();
     let backend = ctx.model_registry.get(&model_id)
@@ -42,7 +50,10 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     let task_msg = Message::user(&session.base_task);
     conversation.push(task_msg);
 
-    let max_iters = ctx.config.max_iterations as usize;
+    // Dynamic iteration limit: complexity-based with hard cap
+    let task_len = session.base_task.len();
+    let dynamic_max = if task_len > 200 { 100 } else if task_len > 80 { 30 } else { 15 };
+    let max_iters = (ctx.config.max_iterations as usize).min(dynamic_max);
     let mut action_history: Vec<String> = Vec::new();
 
     for iteration in 0..max_iters {
@@ -73,7 +84,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         if !session.tui_mode {
-            eprintln!("─── Iteration {}/{} ───", iteration + 1, max_iters);
+            let plan_info = plan.as_ref().map(|p| format!(" [Step {}/{}]", current_step + 1, p.steps.len())).unwrap_or_default();
+            eprintln!("─── Iteration {}/{} {} ───", iteration + 1, max_iters, plan_info);
         }
 
         if iteration > 0 {
@@ -84,13 +96,32 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 .filter(|s| !s.is_empty())
                 .map(|s| format!(". Result: {}", s.chars().take(500).collect::<String>()))
                 .unwrap_or_default();
+
+            let plan_context = plan.as_ref().map(|p| {
+                let step = p.steps.get(current_step);
+                match step {
+                    Some(s) => format!(" | Plan step {}/{}: {}", current_step + 1, p.steps.len(), s.description),
+                    None => String::new(),
+                }
+            }).unwrap_or_default();
+
+            // Per-step iteration bound
+            let step_iter = step_iterations.get(&(current_step as u32)).copied().unwrap_or(0);
+            let step_note = if step_iter > 0 && step_iter % 10 == 0 {
+                format!("\nNOTE: You've been working on the current plan step for {} iterations. If you're stuck, consider a different approach.", step_iter)
+            } else {
+                String::new()
+            };
+
             let progress_msg = format!(
-                "[Progress: step {}/{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]",
+                "[Progress: step {}/{}{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]{}",
                 iteration + 1,
                 max_iters,
+                plan_context,
                 prev_action.trim_end_matches('.'),
                 prev_result,
                 session.base_task,
+                step_note,
             );
             conversation.push(Message::system(progress_msg));
         }
@@ -172,7 +203,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             action_history.remove(0);
         }
         // Store action history on session for memory recall
-        session.variables.insert("action_history".to_string(), action_history.join(","));
+        session.variables.insert("action_history".to_string(), serde_json::to_string(&action_history).unwrap_or_default());
         let repeat_count = action_history.iter()
             .rev()
             .take_while(|&a| a == action_type)
@@ -193,6 +224,28 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 mem.add_task(&session.base_task, action_history.clone(), &session.final_output.clone().unwrap_or_default());
             }
             break;
+        }
+
+        // Behavioral mode: read-only phase enforcement
+        let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
+        let read_only_until = behavior.read_only_iters();
+        if iteration < read_only_until && !matches!(&action, Action::Finish { .. }) {
+            let is_write = matches!(&action,
+                Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }
+                | Action::CreateDirectory { .. } | Action::RestoreBackup { .. }
+            );
+            if is_write {
+                let ro_msg = format!(
+                    "READ-ONLY PHASE: You are in {} mode. No modifications allowed for first {} iterations. \
+                     You are on iteration {}. Only read, list, search, or execute commands. \
+                     Inspect the codebase first.",
+                    behavior.as_str(), read_only_until, iteration + 1,
+                );
+                conversation.push(Message::system(ro_msg));
+                session.variables.insert("last_action".to_string(), action_type.to_string());
+                session.variables.insert("last_result".to_string(), "Blocked by read-only phase".to_string());
+                continue;
+            }
         }
 
         // Security policy evaluation
@@ -295,6 +348,60 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             }
         }
 
+        // --- Plan tracking ---
+        let workspace = ctx.paths.workspace_dir();
+        let plan_path = workspace.join("PLAN.md");
+
+        // Try to load PLAN.md on iterations 1+ if not yet loaded
+        if iteration >= 1 && plan.is_none() && !plan_checked.get() {
+            plan_checked.set(true);
+            if plan_path.exists() {
+                if let Ok(p) = PlanParser::from_file(&plan_path, &session.base_task) {
+                    let total_steps = p.steps.len();
+                    plan = Some(p);
+                    if !session.tui_mode {
+                        eprintln!("── [Plan loaded: {} steps] ──", total_steps);
+                    }
+                }
+            }
+        }
+
+        // Re-parse PLAN.md if it was just written (action was write_file to PLAN.md)
+        if matches!(&action, Action::WriteFile { path, .. } if path.ends_with("PLAN.md") || path.ends_with("plan.md"))
+            || (action_type_name(&action) == "write_file")
+        {
+            if plan_path.exists() {
+                if let Ok(p) = PlanParser::from_file(&plan_path, &session.base_task) {
+                    plan = Some(p);
+                }
+            }
+        }
+
+        // Increment per-step iteration counter
+        if plan.is_some() {
+            *step_iterations.entry(current_step as u32).or_insert(0) += 1;
+        }
+
+        // Track step failures
+        let last_result = session.variables.get("last_result");
+        let is_error = last_result.map(|r| r.starts_with("Error:")).unwrap_or(false);
+        if !is_error && plan.is_some() {
+            // success — clear step failure count
+            step_failures.insert(current_step as u32, 0);
+        } else if is_error && plan.is_some() {
+            // failure
+            let fail_count = step_failures.entry(current_step as u32).or_insert(0);
+            *fail_count += 1;
+            if *fail_count >= 3 {
+                let replan_msg = format!(
+                    "WARNING: Plan step {} has failed {} times. Consider replanning: update PLAN.md with a new approach, then continue.",
+                    current_step + 1, *fail_count
+                );
+                conversation.push(Message::system(replan_msg));
+                *fail_count = 0; // reset to avoid spamming
+            }
+        }
+
         // Save session state
         crate::agent::session::save_session_metadata(&ctx, &session)?;
     }
@@ -338,11 +445,14 @@ fn action_type_name(action: &Action) -> &'static str {
         Action::AskUser { .. } => "ask_user",
         Action::WebSearch { .. } => "web_search",
         Action::WebFetch { .. } => "web_fetch",
+        Action::ShowChanges { .. } => "show_changes",
+        Action::RestoreBackup { .. } => "restore_backup",
     }
 }
 
 fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String {
     let mode = ctx.security.current_mode.as_str();
+    let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
     let workspace = ctx.paths.workspace_dir();
     let ws = workspace.display();
     let os_hint = if cfg!(windows) { "Windows" } else { "Linux/Mac" };
@@ -461,6 +571,8 @@ RULES:
 - Always put reasoning BEFORE the JSON, never after it.
 - Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#;
 
+    let behavior_note = behavior.system_prompt_note();
+
     if supports_native_tools {
         format!(
             r#"You are VO1D, an advanced system agent running in {mode} mode.
@@ -469,7 +581,7 @@ Your workspace is: {ws}
 {conversational_note}
 
 {planning_note}
-
+{behavior_note}
 {tool_docs}
 
 {tool_instructions}
@@ -479,10 +591,12 @@ RULES:
 - All paths are relative to: {ws}
 - OS: {os} — use {shell} syntax for shell commands
 - Current mode: {mode}
+- Behavioral mode: {behavior_name}
 - Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
-            mode = mode, ws = ws,
+            mode = mode, ws = ws, behavior_name = behavior.as_str(),
             conversational_note = conversational_note,
             planning_note = planning_note,
+            behavior_note = if behavior_note.is_empty() { String::new() } else { format!("\n{}\n", behavior_note) },
             tool_docs = tool_docs, tool_instructions = tool_instructions,
             os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
         )
@@ -517,7 +631,7 @@ Your workspace is: {ws}
 {conversational_note}
 
 {planning_note}
-
+{behavior_note}
 {tool_docs}
 
 {tool_instructions_sim}
@@ -526,10 +640,12 @@ RULES:
 - All paths are relative to: {ws}
 - OS: {os} — use {shell} syntax for shell commands
 - Current mode: {mode}
+- Behavioral mode: {behavior_name}
 - Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
-            mode = mode, ws = ws,
+            mode = mode, ws = ws, behavior_name = behavior.as_str(),
             conversational_note = conversational_note,
             planning_note = planning_note,
+            behavior_note = if behavior_note.is_empty() { String::new() } else { format!("\n{}\n", behavior_note) },
             tool_docs = tool_docs, tool_instructions_sim = tool_instructions_sim,
             os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
         )

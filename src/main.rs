@@ -1,9 +1,18 @@
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use vo1d::security::SecurityMode;
 use vo1d::ui::cli::CliOutput;
 use vo1d::AppContext;
+
+#[derive(ValueEnum, Clone, Debug)]
+enum BehaviorArg {
+    Normal,
+    Fix,
+    Research,
+    Refactor,
+    Tdd,
+}
 
 #[derive(Parser)]
 #[command(name = "vo1d", version, about = "VO1D - Local-first autonomous AI execution agent")]
@@ -18,6 +27,10 @@ struct Cli {
     /// Override security mode
     #[arg(long, global = true)]
     mode: Option<SecurityModeArg>,
+
+    /// Behavioral mode (normal, fix, research, refactor, tdd)
+    #[arg(long, global = true)]
+    behavior: Option<BehaviorArg>,
 
     /// Set custom workspace directory
     #[arg(long, global = true)]
@@ -83,6 +96,9 @@ enum Commands {
         /// Run all curricula in sequence (autotrain)
         #[arg(long, short, default_value_t = false)]
         all: bool,
+        /// Autotrain failure policy: stop, skip, or retry
+        #[arg(long, default_value = "skip")]
+        on_failure: String,
     },
     /// Edit or view configuration
     Config,
@@ -165,6 +181,18 @@ async fn main() -> Result<()> {
         ctx.security.set_mode(security_mode);
     }
 
+    // Override behavioral mode if provided via CLI
+    if let Some(ref b) = cli.behavior {
+        let behavior_str = match b {
+            BehaviorArg::Normal => "normal",
+            BehaviorArg::Fix => "fix",
+            BehaviorArg::Research => "research",
+            BehaviorArg::Refactor => "refactor",
+            BehaviorArg::Tdd => "tdd",
+        };
+        ctx.config.default_behavior = behavior_str.to_string();
+    }
+
     // Override default model if provided via CLI (global --model flag)
     if let Some(ref model_id) = cli.model {
         ctx.config.default_model = model_id.clone();
@@ -190,9 +218,9 @@ async fn main() -> Result<()> {
         Some(Commands::Sessions) => {
             run_sessions(ctx).await?;
         }
-        Some(Commands::Train { curriculum, manual, all }) => {
+        Some(Commands::Train { curriculum, manual, all, on_failure }) => {
             if all {
-                vo1d::agent::train::run_autotrain(ctx, manual).await?;
+                vo1d::agent::train::run_autotrain_with_policy(ctx, manual, &on_failure).await?;
             } else {
                 match curriculum {
                     Some(name) => run_train(ctx, &name, manual).await?,

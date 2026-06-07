@@ -9,6 +9,11 @@ pub const BUILTIN_NAMES: &[&str] = &[
     "04_shell_basics",
     "05_web_basics",
     "06_rust_fix",
+    "06a_syntax",
+    "06b_deps",
+    "06c_logic",
+    "06d_multi_file",
+    "06e_environment",
     "07_project_setup",
 ];
 
@@ -22,6 +27,11 @@ pub fn get(name: &str) -> Option<&'static str> {
         "04_shell_basics" => Some(include_str!("../../curriculum/04_shell_basics.json")),
         "05_web_basics" => Some(include_str!("../../curriculum/05_web_basics.json")),
         "06_rust_fix" => Some(include_str!("../../curriculum/06_rust_fix.json")),
+        "06a_syntax" => Some(include_str!("../../curriculum/06a_syntax.json")),
+        "06b_deps" => Some(include_str!("../../curriculum/06b_deps.json")),
+        "06c_logic" => Some(include_str!("../../curriculum/06c_logic.json")),
+        "06d_multi_file" => Some(include_str!("../../curriculum/06d_multi_file.json")),
+        "06e_environment" => Some(include_str!("../../curriculum/06e_environment.json")),
         "07_project_setup" => Some(include_str!("../../curriculum/07_project_setup.json")),
         _ => None,
     }

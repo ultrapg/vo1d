@@ -1,0 +1,60 @@
+{
+  "name": "Rust Fix — Multi-File Projects",
+  "description": "Fix issues spanning multiple files: cross-module type mismatches, broken exports, missing visibility modifiers.",
+  "tasks": [
+    {
+      "id": "fix_visibility",
+      "description": "A project has main.rs and a helper module in helper.rs. The helper module has a function but it's not public. Make it pub so main.rs can call it. Compile with 'rustc main.rs --edition 2021'.",
+      "expected_outcome": "rustc main.rs --edition 2021 compiles the multi-file project",
+      "setup": [
+        "echo mod helper; > main.rs",
+        "echo fn main() { >> main.rs",
+        "echo     helper::greet(); >> main.rs",
+        "echo } >> main.rs",
+        "echo fn greet() { > helper.rs",
+        "echo     println!(\"Hello from helper!\"); >> helper.rs",
+        "echo } >> helper.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc main.rs --edition 2021 2>&1"]
+      }
+    },
+    {
+      "id": "fix_type_mismatch_cross_module",
+      "description": "A project has two modules: 'input' and 'process'. The input module returns a String but process expects &str. Fix the type mismatch so 'rustc main.rs --edition 2021' compiles.",
+      "expected_outcome": "rustc main.rs --edition 2021 compiles without errors",
+      "setup": [
+        "echo mod input; > main.rs",
+        "echo mod process; >> main.rs",
+        "echo fn main() { >> main.rs",
+        "echo     let data = input::read_data(); >> main.rs",
+        "echo     process::handle(data); >> main.rs",
+        "echo } >> main.rs",
+        "echo pub fn read_data() -> String { > input.rs",
+        "echo     String::from(\"test\") >> input.rs",
+        "echo } >> input.rs",
+        "echo pub fn handle(data: &str) { > process.rs",
+        "echo     println!(\"Data: {}\", data); >> process.rs",
+        "echo } >> process.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc main.rs --edition 2021 2>&1"]
+      }
+    },
+    {
+      "id": "fix_missing_module_file",
+      "description": "A Cargo project 'multi_app' has a module declared in main.rs but no corresponding file. Create the missing module file with an appropriate function.",
+      "expected_outcome": "cargo check succeeds in multi_app directory",
+      "setup": [
+        "cargo init multi_app --name multi_app 2>&1",
+        "echo pub mod utils; > multi_app\\src\\main.rs",
+        "echo fn main() { >> multi_app\\src\\main.rs",
+        "echo     println!(\"{}\", utils::greeting()); >> multi_app\\src\\main.rs",
+        "echo } >> multi_app\\src\\main.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["cd multi_app && cargo check 2>&1"]
+      }
+    }
+  ]
+}

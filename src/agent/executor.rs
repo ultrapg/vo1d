@@ -76,6 +76,16 @@ impl ToolExecutor {
             Action::WebFetch { url, max_chars } => {
                 crate::tools::web_fetch::WebFetch::fetch(url, *max_chars).await
             }
+            Action::ShowChanges { path } => {
+                let expanded = path.as_ref()
+                    .map(|p| ctx.paths.resolve_workspace_path(p))
+                    .map(|p| p.to_string_lossy().to_string());
+                crate::tools::changes::Changes::show(expanded.as_deref())
+            }
+            Action::RestoreBackup { path } => {
+                let expanded = ctx.paths.resolve_workspace_path(path);
+                crate::tools::changes::Changes::restore(&expanded.to_string_lossy())
+            }
         }
     }
 }

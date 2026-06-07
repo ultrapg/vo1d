@@ -61,6 +61,7 @@ impl PolicyEngine {
             Action::SearchFiles { .. } => PolicyResult::Allow,
             Action::WebSearch { .. } => PolicyResult::Allow,
             Action::WebFetch { .. } => PolicyResult::Allow,
+            Action::ShowChanges { .. } => PolicyResult::Allow,
             Action::Finish { .. } => PolicyResult::Allow,
             _ => PolicyResult::Block,
         }

@@ -93,6 +93,15 @@ pub enum Action {
         #[serde(skip_serializing_if = "Option::is_none")]
         max_chars: Option<usize>,
     },
+    #[serde(rename = "show_changes")]
+    ShowChanges {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+    },
+    #[serde(rename = "restore_backup")]
+    RestoreBackup {
+        path: String,
+    },
 }
 
 fn default_dot() -> String {
@@ -123,12 +132,14 @@ impl Action {
             Action::AskUser { question } => format!("Ask user: {}", question),
             Action::WebSearch { query, .. } => format!("Web search: {}", query),
             Action::WebFetch { url, .. } => format!("Web fetch: {}", url),
+            Action::ShowChanges { .. } => "Show changes".to_string(),
+            Action::RestoreBackup { path } => format!("Restore backup: {}", path),
         }
     }
 
     /// Returns true if this action is potentially destructive.
     pub fn is_destructive(&self) -> bool {
-        matches!(self, Action::DeleteFile { .. } | Action::WriteFile { .. })
+        matches!(self, Action::DeleteFile { .. } | Action::WriteFile { .. } | Action::RestoreBackup { .. })
     }
 }
 

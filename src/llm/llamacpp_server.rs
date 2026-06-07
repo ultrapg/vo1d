@@ -7,14 +7,14 @@ use futures_util::{Stream, StreamExt};
 /// llama.cpp server backend (OpenAI-compatible API).
 pub struct LlamaCppServerBackend {
     base_url: String,
-    model: String,
+    _model: String,
 }
 
 impl LlamaCppServerBackend {
     pub fn new(base_url: Option<String>, model: String) -> Self {
         Self {
             base_url: base_url.unwrap_or_else(|| "http://localhost:8080".to_string()),
-            model,
+            _model: model,
         }
     }
 

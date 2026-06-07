@@ -1,0 +1,59 @@
+{
+  "name": "Rust Fix — Logic Bugs",
+  "description": "Fix logic bugs in Rust programs: off-by-one errors, wrong operators, incorrect conditions.",
+  "tasks": [
+    {
+      "id": "fix_off_by_one",
+      "description": "A file called sum.rs has an off-by-one error in a loop. It should sum numbers from 1 to 10 but gets the wrong answer. Fix the loop bounds so the output is 55.",
+      "expected_outcome": "sum.rs prints 'Sum: 55'",
+      "setup": [
+        "echo fn main() { > sum.rs",
+        "echo     let mut sum = 0; >> sum.rs",
+        "echo     for i in 1..10 { // BUG: should include 10 >> sum.rs",
+        "echo         sum += i; >> sum.rs",
+        "echo     } >> sum.rs",
+        "echo     println!(\"Sum: {}\", sum); >> sum.rs",
+        "echo } >> sum.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc sum.rs 2>&1"],
+        "check_command_output": ["sum.exe::Sum: 55"]
+      }
+    },
+    {
+      "id": "fix_wrong_operator",
+      "description": "A file called divide.rs divides numbers but uses integer division instead of floating point. Fix it so the output is '2.5'.",
+      "expected_outcome": "divide.rs prints '2.5'",
+      "setup": [
+        "echo fn main() { > divide.rs",
+        "echo     let a = 5; >> divide.rs",
+        "echo     let b = 2; >> divide.rs",
+        "echo     println!(\"{}\", a / b); // BUG: integer division >> divide.rs",
+        "echo } >> divide.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc divide.rs 2>&1"],
+        "check_command_output": ["divide.exe::2.5"]
+      }
+    },
+    {
+      "id": "fix_inverted_condition",
+      "description": "A file called check.rs has an inverted condition that prints 'even' for odd numbers and vice versa. Fix the logic so it correctly identifies even numbers.",
+      "expected_outcome": "check.rs prints 'Number 7 is odd' and 'Number 4 is even' when run with appropriate test",
+      "setup": [
+        "echo fn main() { > check.rs",
+        "echo     let n = 7; >> check.rs",
+        "echo     if n % 2 == 0 { // BUG: inverted >> check.rs",
+        "echo         println!(\"Number {} is odd\", n); >> check.rs",
+        "echo     } else { >> check.rs",
+        "echo         println!(\"Number {} is even\", n); >> check.rs",
+        "echo     } >> check.rs",
+        "echo } >> check.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc check.rs 2>&1"],
+        "check_command_output": ["check.exe::Number 7 is odd"]
+      }
+    }
+  ]
+}

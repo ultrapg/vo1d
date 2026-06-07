@@ -39,6 +39,9 @@ pub struct SolutionRecord {
     pub outcome: String,
     pub timestamp: String,
     pub success_count: u32,
+    /// Structured action sequence that led to success
+    #[serde(default)]
+    pub actions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,6 +54,9 @@ pub struct MistakeRecord {
     pub how_to_avoid: String,
     pub timestamp: String,
     pub frequency: u32,
+    /// Action sequence that led to the mistake
+    #[serde(default)]
+    pub actions: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,21 +173,31 @@ impl MemoryStore {
         let tags = Self::extract_tags(task_description);
         let id = Self::next_id("sol");
 
-        // Deduplicate: if same task exists, update it with higher success_count
+        let action_str = if actions_taken.is_empty() {
+            String::new()
+        } else {
+            format!(" | Actions: [{}]", actions_taken.join(", "))
+        };
+
+        // Deduplicate: if same task exists, update it
         if let Some(existing) = self.solutions.iter_mut().find(|s| s.task_description == task_description) {
             existing.success_count += 1;
-            existing.solution = solution.to_string();
+            existing.solution = format!("{}{}", solution, action_str);
             existing.outcome = outcome.to_string();
             existing.timestamp = chrono::Utc::now().to_rfc3339();
+            if !actions_taken.is_empty() {
+                existing.actions = actions_taken.to_vec();
+            }
         } else {
             self.solutions.push(SolutionRecord {
                 id,
                 task_description: task_description.to_string(),
                 tags,
-                solution: format!("{} | Actions: [{}]", solution, actions_taken.join(", ")),
+                solution: format!("{}{}", solution, action_str),
                 outcome: outcome.to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 success_count: 1,
+                actions: actions_taken.to_vec(),
             });
         }
         if self.solutions.len() > 100 {
@@ -196,27 +212,30 @@ impl MemoryStore {
         let tags = Self::extract_tags(task_description);
         let id = Self::next_id("mist");
 
+        let action_str = if !actions_taken.is_empty() {
+            format!(" | Actions: [{}]", actions_taken.join(", "))
+        } else {
+            String::new()
+        };
+
         if let Some(existing) = self.mistakes.iter_mut().find(|m| m.mistake == mistake) {
             existing.frequency += 1;
             existing.timestamp = chrono::Utc::now().to_rfc3339();
             if !actions_taken.is_empty() {
                 existing.lesson = format!("{} (actions that failed: {})", lesson, actions_taken.join(", "));
+                existing.actions = actions_taken.to_vec();
             }
         } else {
-            let enriched_mistake = if !actions_taken.is_empty() {
-                format!("{} | Actions: [{}]", mistake, actions_taken.join(", "))
-            } else {
-                mistake.to_string()
-            };
             self.mistakes.push(MistakeRecord {
                 id,
                 task_description: task_description.to_string(),
                 tags,
-                mistake: enriched_mistake,
+                mistake: format!("{}{}", mistake, action_str),
                 lesson: lesson.to_string(),
                 how_to_avoid: how_to_avoid.to_string(),
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 frequency: 1,
+                actions: actions_taken.to_vec(),
             });
         }
         if self.mistakes.len() > 100 {
@@ -442,6 +461,41 @@ impl MemoryStore {
             recall_parts.push(format!("RELEVANT NOTES:\n{}", note_texts.join("\n")));
         }
 
+        // Plan template matching: find past solutions with PLAN.md-like step structures
+        let plan_templates: Vec<String> = self.solutions.iter()
+            .filter(|s| {
+                let combined = format!("{} {}", s.task_description, s.solution);
+                let lower = combined.to_lowercase();
+                (lower.contains("## step") || lower.contains("## plan") || lower.contains("plan.md"))
+                    && (lower.contains(&current_task.to_lowercase())
+                        || similar.solutions.iter().any(|sim| sim.id == s.id))
+            })
+            .take(2)
+            .map(|s| {
+                // Extract plan-like section from solution
+                let plan_section = if s.solution.contains("## Step") || s.solution.contains("## Plan") || s.solution.contains("PLAN.md") {
+                    s.solution.clone()
+                } else {
+                    String::new()
+                };
+                if plan_section.is_empty() {
+                    format!("  [{}] {} — review memory for plan details", s.id, s.task_description)
+                } else {
+                    // Truncate plan section to a reasonable size
+                    let truncated = if plan_section.len() > 600 {
+                        format!("{}...", &plan_section[..597])
+                    } else {
+                        plan_section
+                    };
+                    format!("  [{}] {} — plan template:\n{}", s.id, s.task_description, truncated)
+                }
+            })
+            .collect();
+
+        if !plan_templates.is_empty() {
+            recall_parts.push(format!("PLAN TEMPLATES FROM PAST TASKS:\n{}", plan_templates.join("\n\n")));
+        }
+
         if recall_parts.is_empty() {
             base
         } else {
@@ -460,7 +514,14 @@ impl MemoryStore {
                         "config", "code", "script", "test", "build", "deploy",
                         "python", "rust", "javascript", "json", "yaml", "toml",
                         "git", "docker", "database", "api", "server",
-                        "hello world", "greeting"];
+                        "hello world", "greeting",
+                        "refactor", "debug", "fix", "module", "dependency",
+                        "compile", "syntax", "error", "lint", "format",
+                        "documentation", "readme", "markdown",
+                        "scaffold", "template", "init", "setup",
+                        "pipeline", "workflow", "automation",
+                        "sort", "filter", "transform", "parse", "validate",
+                        "backup", "revert", "rollback", "restore"];
 
         for kw in &keywords {
             if lowercase.contains(kw) {
@@ -468,6 +529,7 @@ impl MemoryStore {
             }
         }
 
+        tags.dedup();
         tags
     }
 

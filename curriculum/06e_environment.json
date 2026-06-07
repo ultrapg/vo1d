@@ -1,0 +1,57 @@
+{
+  "name": "Rust Fix — Environment & Build Config",
+  "description": "Fix build configuration issues: incorrect Cargo.toml settings, broken build scripts, wrong edition, missing binaries.",
+  "tasks": [
+    {
+      "id": "fix_edition_error",
+      "description": "A Cargo project 'old_app' uses an invalid edition in Cargo.toml. Fix the edition to a valid one (2021) so 'cargo check' succeeds.",
+      "expected_outcome": "cargo check succeeds in old_app directory",
+      "setup": [
+        "cargo init old_app --name old_app 2>&1",
+        "echo [package] > old_app\\Cargo.toml",
+        "echo name = \"old_app\" >> old_app\\Cargo.toml",
+        "echo version = \"0.1.0\" >> old_app\\Cargo.toml",
+        "echo edition = \"1999\" >> old_app\\Cargo.toml",
+        "echo [dependencies] >> old_app\\Cargo.toml",
+        "echo serde = \"1\" >> old_app\\Cargo.toml"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["cd old_app && cargo check 2>&1"]
+      }
+    },
+    {
+      "id": "fix_missing_bin",
+      "description": "A Cargo project 'cli_tool' has the [[bin]] section pointing to a nonexistent source file. Create the file or fix the path so 'cargo check' succeeds.",
+      "expected_outcome": "cargo check succeeds in cli_tool directory",
+      "setup": [
+        "cargo init cli_tool --name cli_tool 2>&1",
+        "del cli_tool\\src\\main.rs 2>nul",
+        "echo [package] > cli_tool\\Cargo.toml",
+        "echo name = \"cli_tool\" >> cli_tool\\Cargo.toml",
+        "echo version = \"0.1.0\" >> cli_tool\\Cargo.toml",
+        "echo edition = \"2021\" >> cli_tool\\Cargo.toml",
+        "echo [[bin]] >> cli_tool\\Cargo.toml",
+        "echo name = \"cli_tool\" >> cli_tool\\Cargo.toml",
+        "echo path = \"src/main.rs\" >> cli_tool\\Cargo.toml"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["cd cli_tool && cargo check 2>&1"]
+      }
+    },
+    {
+      "id": "fix_broken_build_rs",
+      "description": "A Cargo project 'with_build' has a build.rs that doesn't compile. Fix the build script so 'cargo check' succeeds.",
+      "expected_outcome": "cargo check succeeds in with_build directory",
+      "setup": [
+        "cargo init with_build --name with_build 2>&1",
+        "echo fn main() { > with_build\\build.rs",
+        "echo     println!(\"Configuring build...\"); >> with_build\\build.rs",
+        "echo     brok en code >> with_build\\build.rs",
+        "echo } >> with_build\\build.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["cd with_build && cargo check 2>&1"]
+      }
+    }
+  ]
+}

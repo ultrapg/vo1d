@@ -19,25 +19,68 @@ const AUTOTRAIN_CURRICULA: &[&str] = &[
     "03_search_nav",
     "04_shell_basics",
     "05_web_basics",
-    "06_rust_fix",
+    "06a_syntax",
+    "06b_deps",
+    "06c_logic",
+    "06d_multi_file",
+    "06e_environment",
     "07_project_setup",
 ];
 
 /// Runs all built-in curricula in sequence (autotrain mode).
 pub async fn run_autotrain(ctx: AppContext, manual: bool) -> Result<()> {
-    println!("\n=== AUTOTRAIN MODE ===");
+    run_autotrain_with_policy(ctx, manual, "skip").await
+}
+
+/// Runs autotrain with a configurable failure policy.
+/// `on_failure` can be "stop", "skip", or "retry" (with max 3 retries).
+pub async fn run_autotrain_with_policy(ctx: AppContext, manual: bool, on_failure: &str) -> Result<()> {
+    println!("\n=== AUTOTRAIN MODE (on_failure={}) ===", on_failure);
     println!("Running all {} curricula in sequence...\n", AUTOTRAIN_CURRICULA.len());
 
     for (i, name) in AUTOTRAIN_CURRICULA.iter().enumerate() {
         println!("\n═══ Curriculum {}/{}: {} ═══", i + 1, AUTOTRAIN_CURRICULA.len(), name);
 
-        match Curriculum::load_from_name(&ctx, name) {
-            Ok(curriculum) => {
-                run_curriculum_raw_with(ctx.clone(), curriculum, manual).await?;
-            }
+        let curriculum = match Curriculum::load_from_name(&ctx, name) {
+            Ok(c) => c,
             Err(e) => {
-                eprintln!("  ⚠ {}", e);
-                continue;
+                eprintln!("  ⚠ {} - {}", name, e);
+                match on_failure {
+                    "stop" => return Err(anyhow::anyhow!("Autotrain stopped: {}", e)),
+                    _ => continue,
+                }
+            }
+        };
+
+        let result = run_curriculum_raw_with(ctx.clone(), curriculum, manual).await;
+
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("  ✗ Curriculum {} failed: {}", name, e);
+                match on_failure {
+                    "stop" => return Err(anyhow::anyhow!("Autotrain stopped on {}: {}", name, e)),
+                    "retry" => {
+                        let mut retries = 0;
+                        loop {
+                            if retries >= 3 {
+                                eprintln!("  ✗ {} failed after 3 retries, skipping.", name);
+                                break;
+                            }
+                            println!("  Retrying {} (attempt {})...", name, retries + 2);
+                            match Curriculum::load_from_name(&ctx, name) {
+                                Ok(c) => {
+                                    if run_curriculum_raw_with(ctx.clone(), c, manual).await.is_ok() {
+                                        break;
+                                    }
+                                }
+                                Err(_) => break,
+                            }
+                            retries += 1;
+                        }
+                    }
+                    _ => {} // skip
+                }
             }
         }
 
@@ -221,9 +264,9 @@ WORKFLOW:
     let elapsed = start.elapsed();
     let evaluation = evaluate_task(task, sandbox);
 
-    // Collect action sequence for richer memory
+    // Collect action sequence for richer memory (stored as JSON array)
     let actions_taken: Vec<String> = result.variables.get("action_history")
-        .map(|h| h.split(',').map(|s| s.to_string()).collect())
+        .and_then(|h| serde_json::from_str(h).ok())
         .unwrap_or_default();
     let action_summary = if actions_taken.is_empty() {
         vec![format!("{} actions in {:?}", result.variables.get("action_count").map(|c| c.as_str()).unwrap_or("?"), elapsed)]
@@ -263,11 +306,6 @@ fn execute_setup(task: &crate::core::curriculum::TaskDefinition, sandbox: &Path)
 
 fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, result: &EvaluationResult) {
     if let Ok(mut mem) = ctx.memory.lock() {
-        mem.add_task(
-            &task.id,
-            vec![format!("train:{}", task.description)],
-            &result.outcome,
-        );
         if result.passed {
             let solution = format!("Used correct approach for '{}' and achieved: {}",
                 task.description, task.expected_outcome);

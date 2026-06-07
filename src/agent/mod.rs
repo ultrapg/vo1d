@@ -1,5 +1,6 @@
 pub mod loop_;
 pub mod planner;
+pub mod plan_parser;
 pub mod session;
 pub mod checkpoint;
 pub mod parser;

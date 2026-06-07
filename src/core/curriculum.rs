@@ -17,6 +17,9 @@ pub struct EvaluationCriteria {
     /// Command output checks: "command::expected text"
     #[serde(default)]
     pub check_command_output: Option<Vec<String>>,
+    /// Command exit code checks: "command" (command must exit with code 0)
+    #[serde(default)]
+    pub check_command_exit_code: Option<Vec<String>>,
 }
 
 /// A single task in the curriculum.
@@ -156,6 +159,34 @@ pub fn evaluate_task(task: &TaskDefinition, sandbox_dir: &Path) -> EvaluationRes
                 }
             }
         }
+
+        // Exit code checks: command must exit with code 0
+        if let Some(ref cmds) = criteria.check_command_exit_code {
+            for cmd in cmds {
+                let shell = if cfg!(windows) { "cmd.exe" } else { "sh" };
+                let arg = if cfg!(windows) { "/C" } else { "-c" };
+                match std::process::Command::new(shell)
+                    .args(&[arg, cmd])
+                    .current_dir(sandbox_dir)
+                    .output()
+                {
+                    Ok(output) => {
+                        if output.status.success() {
+                            details.push(format!("Command '{}' exited with code 0", cmd));
+                        } else {
+                            let code = output.status.code().unwrap_or(-1);
+                            let stderr = String::from_utf8_lossy(&output.stderr);
+                            details.push(format!("FAIL: Command '{}' exited with code {}: {}", cmd, code, stderr.trim()));
+                            passed = false;
+                        }
+                    }
+                    Err(e) => {
+                        details.push(format!("FAIL: Cannot run command '{}': {}", cmd, e));
+                        passed = false;
+                    }
+                }
+            }
+        }
     }
 
     if details.is_empty() {
@@ -210,6 +241,7 @@ mod tests {
                 check_file_content: None,
                 check_directory_exists: None,
                 check_command_output: None,
+                check_command_exit_code: None,
             }),
             setup: None,
         };
@@ -229,6 +261,7 @@ mod tests {
                 check_file_content: None,
                 check_directory_exists: None,
                 check_command_output: None,
+                check_command_exit_code: None,
             }),
             setup: None,
         };
@@ -250,6 +283,7 @@ mod tests {
                 check_file_content: Some(vec!["hello.txt::World".to_string()]),
                 check_directory_exists: None,
                 check_command_output: None,
+                check_command_exit_code: None,
             }),
             setup: None,
         };
@@ -271,6 +305,7 @@ mod tests {
                 check_file_content: None,
                 check_directory_exists: Some(vec!["subdir".to_string()]),
                 check_command_output: None,
+                check_command_exit_code: None,
             }),
             setup: None,
         };

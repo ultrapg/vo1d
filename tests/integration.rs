@@ -159,6 +159,7 @@ fn test_evaluate_task_integration() {
             check_file_content: Some(vec!["exists.txt::world".to_string()]),
             check_directory_exists: Some(vec!["mydir".to_string()]),
             check_command_output: None,
+            check_command_exit_code: None,
         }),
         setup: None,
     };
@@ -229,6 +230,8 @@ fn test_action_descriptions_all_non_empty() {
         Action::AskUser { question: "?".into() },
         Action::WebSearch { query: "rust".into(), num_results: None },
         Action::WebFetch { url: "https://example.com".into(), max_chars: None },
+        Action::ShowChanges { path: None },
+        Action::RestoreBackup { path: "a".into() },
     ];
 
     for action in &actions {
@@ -268,6 +271,8 @@ fn test_action_type_names_match_registry() {
         (Action::AskUser { question: "".into() }, "ask_user"),
         (Action::WebSearch { query: "".into(), num_results: None }, "web_search"),
         (Action::WebFetch { url: "".into(), max_chars: None }, "web_fetch"),
+        (Action::ShowChanges { path: None }, "show_changes"),
+        (Action::RestoreBackup { path: "".into() }, "restore_backup"),
     ];
 
     for (action, expected_name) in &pairs {

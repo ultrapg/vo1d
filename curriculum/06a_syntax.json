@@ -1,0 +1,50 @@
+{
+  "name": "Rust Fix — Syntax Errors",
+  "description": "Fix basic syntax errors in Rust programs: missing semicolons, unmatched braces, typos.",
+  "tasks": [
+    {
+      "id": "fix_missing_semicolon",
+      "description": "A file called greet.rs has a missing semicolon. Fix it so 'rustc greet.rs' compiles successfully.",
+      "expected_outcome": "greet.rs compiles with rustc without errors",
+      "setup": [
+        "echo fn main() { > greet.rs",
+        "echo     let name = \"World\"; >> greet.rs",
+        "echo     println!(\"Hello, {}\", name) >> greet.rs",
+        "echo } >> greet.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc greet.rs 2>&1"]
+      }
+    },
+    {
+      "id": "fix_unmatched_brace",
+      "description": "A file called math.rs has an unmatched closing brace. Fix it so 'rustc math.rs' compiles.",
+      "expected_outcome": "math.rs compiles with rustc without errors",
+      "setup": [
+        "echo fn main() { > math.rs",
+        "echo     let x = 5; >> math.rs",
+        "echo     let y = 10; >> math.rs",
+        "echo     println!(\"Sum: {}\", x + y); >> math.rs",
+        "echo } } >> math.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc math.rs 2>&1"]
+      }
+    },
+    {
+      "id": "fix_typo_keyword",
+      "description": "A file called hello.rs has a keyword typo. Fix it so 'rustc hello.rs' compiles and runs producing 'Hello, Rust!'.",
+      "expected_outcome": "hello.rs compiles and prints 'Hello, Rust!'",
+      "setup": [
+        "echo fn main() { > hello.rs",
+        "echo     let msg = \"Hello, Rust!\"; >> hello.rs",
+        "echo     println!(\"{}\", msg) >> hello.rs",
+        "echo } >> hello.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc hello.rs 2>&1"],
+        "check_command_output": ["hello.exe::Hello, Rust!"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "name": "Rust Fix — Dependency & Import Errors",
+  "description": "Fix missing imports, use statements, and module declaration issues in Rust projects.",
+  "tasks": [
+    {
+      "id": "fix_missing_use",
+      "description": "A file called io.rs uses std::io::stdin() but is missing the use statement. Add it so the file compiles.",
+      "expected_outcome": "io.rs compiles with rustc without errors",
+      "setup": [
+        "echo fn main() { > io.rs",
+        "echo     let mut input = String::new(); >> io.rs",
+        "echo     stdin().read_line(&mut input).unwrap(); >> io.rs",
+        "echo     println!(\"Got: {}\", input.trim()); >> io.rs",
+        "echo } >> io.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc io.rs 2>&1"]
+      }
+    },
+    {
+      "id": "fix_module_decl",
+      "description": "A file called main.rs has a module declaration for 'utils' but there's no utils.rs file. Either create utils.rs with a greet function or fix the module declaration.",
+      "expected_outcome": "rustc main.rs compiles successfully",
+      "setup": [
+        "echo mod utils; > main.rs",
+        "echo fn main() { >> main.rs",
+        "echo     utils::greet(); >> main.rs",
+        "echo } >> main.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["rustc main.rs 2>&1"]
+      }
+    },
+    {
+      "id": "fix_extern_crate",
+      "description": "A Cargo project in 'web_app' references an external crate 'serde' in Cargo.toml but the import in main.rs is wrong. Fix the import so 'cargo check' succeeds.",
+      "expected_outcome": "cargo check succeeds in web_app directory",
+      "setup": [
+        "cargo init web_app --name web_app 2>&1",
+        "echo serde = \"1\" >> web_app\\Cargo.toml",
+        "echo use serde_json; > web_app\\src\\main.rs",
+        "echo fn main() { >> web_app\\src\\main.rs",
+        "echo     println!(\"ok\"); >> web_app\\src\\main.rs",
+        "echo } >> web_app\\src\\main.rs"
+      ],
+      "evaluation": {
+        "check_command_exit_code": ["cd web_app && cargo check 2>&1"]
+      }
+    }
+  ]
+}
