@@ -9,15 +9,17 @@
 - **Local LLM inference** — Built-in llama.cpp backend, no cloud dependency
 - **Autonomous task execution** — ReAct agent loop that plans, acts, and iterates
 - **5 security modes** — Safe, Interactive, PowerUser, Autonomous, YOLO
+- **16 built-in tools** — File operations, shell commands, web tools, change tracking, restore
 - **Web tools** — Web search (DuckDuckGo) and web page fetching (HTML→markdown conversion)
 - **File & shell tools** — Complete file operations, command execution, directory management, HTTP requests
 - **Context compression** — Opencode-style two-phase pruning & compacting (prune oversized tool outputs + compact old messages)
-- **Training curriculum** — Progressive learning system with 8 built-in curricula, real-world testing environments, and autotrain mode (`vo1d train --all`)
+- **Training curriculum** — Progressive learning system with 13 built-in curricula, real-world testing environments, and autotrain mode (`vo1d train --all`)
 - **Self-correction system** — Failure tracking, error classification with tailored suggestions, auto-correction prompts after repeated failures
 - **Documentation-driven system prompt** — Markdown docs loaded at startup and injected into system prompt for better tool usage guidance
 - **Learning memory system** — Cross-session memory that learns from successes and mistakes, stores solutions for future recall, and finds relevant past experiences by keyword similarity
 - **Self-improvement through training** — Training stores successful solutions and records mistakes as lessons; future tasks receive relevant past experiences injected into the prompt
-- **PLAN.md workflow** — Model creates a step-by-step plan file before execution, then works through it methodically
+- **PLAN.md workflow** — Model creates a step-by-step plan file before execution, then works through it methodically with automatic step tracking and recovery
+- **Behavior modes** — Normal, Fix, Research, Refactor, and TDD modes each enforce read-only phases, plan requirements, and mode-specific system prompt notes
 - **Audit logging** — Every action is logged with timestamps and security context
 - **Hardware profiling** — Auto-detects CPU/GPU/RAM and recommends compatible models
 - **Interactive REPL** — Chat-like interface for iterative task execution
@@ -37,7 +39,7 @@ vo1d/
     ├── agent/              # ReAct agent loop
     │   ├── loop_.rs        # Main agent iteration loop
     │   ├── parser.rs       # JSON action parser (extracts ```json blocks)
-    │   ├── planner.rs      # High-level plan generation
+    │   ├── plan_parser.rs  # Markdown PLAN.md parser (step headers, checkboxes, actions)
     │   ├── executor.rs     # Tool execution dispatch
     │   ├── session.rs      # Session state, save/resume
     │   ├── checkpoint.rs   # Iteration checkpointing
@@ -49,6 +51,7 @@ vo1d/
     │   ├── compression.rs  # Context compression (prune+compact)
     │   ├── curriculum.rs   # Curriculum evaluation & loading
     │   ├── embedded_curricula.rs # Binary-embedded curriculum JSON (include_str!)
+    │   ├── behavior.rs     # Behavior modes (Normal, Fix, Research, Refactor, Tdd)
     │   ├── docs.rs         # Markdown documentation provider for system prompt
     │   ├── self_correction.rs   # FailureTracker & ErrorClassifier
     │   └── error_suggestions.rs # Detailed error analysis with markdown suggestions
@@ -58,6 +61,7 @@ vo1d/
     │   ├── registry.rs     # Tool registry (tool metadata)
     │   ├── files.rs        # File operations
     │   ├── shell.rs        # Shell command execution
+    │   ├── changes.rs      # show_changes & restore_backup tools
     │   ├── web.rs          # HTTP request tool
     │   ├── web_search.rs   # Web search (DuckDuckGo)
     │   ├── web_fetch.rs    # Web page fetch & HTML→markdown
@@ -78,9 +82,6 @@ vo1d/
     │   ├── message.rs      # Message, LlmResponse, TokenUsage
     │   ├── action.rs       # Action enum (all tool actions)
     │   └── tool.rs         # Tool definition
-    ├── core/               # Core utilities
-    │   ├── paths.rs        # Vo1dPaths (portable directory resolver)
-    │   └── hardware.rs     # Hardware profiling (CPU/GPU/RAM)
     └── utils/              # Misc utilities
         ├── crypto.rs       # SHA256 hashing
         ├── time.rs         # Timestamp formatting
@@ -164,6 +165,9 @@ vo1d task "list all files in the workspace"
 # Run with autonomous mode (auto-approve actions)
 vo1d task "create a python script and run it" --mode autonomous
 
+# Run with Fix behavior mode (read-only phase, focused debugging)
+vo1d task "fix the broken Rust test" --behavior fix
+
 # Enable verbose debug output
 vo1d task "search for todos in the codebase" --debug
 
@@ -173,6 +177,9 @@ vo1d --resume <session-id>
 # Train on a curriculum (progressive learning)
 vo1d train 00_hello_world
 vo1d train curriculum/my_custom_curriculum.json
+
+# Run all curricula with failure retry policy
+vo1d train --all --on-failure retry
 ```
 
 ---
@@ -191,20 +198,24 @@ vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **context compression
 8. **Context compression** occurs if conversation exceeds ~80% of context limit:
    - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 chars) with length markers
    - **Phase 2 (Compact)**: Keep system prompt, user task, and recent messages; compress old sections into summary markers
-9. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
+9. **PLAN.md tracking** (after iteration 1): If PLAN.md exists in workspace, the loop tracks step progress, iteration counts per step, and injects stuck/recovery messages as needed
+10. **Behavior mode enforcement**: Fix/Research modes enforce a read-only phase (blocking writes for first 5 iterations)
+11. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
 
 ```
   User input → [System Prompt + Conversation] → LLM → JSON Action
                                                         ↓
-                                               Security Policy
+                                                Security Policy
                                                         ↓
-                                               Tool Executor → Result
+                                                Tool Executor → Result
                                                         ↓
-                                               Append to Conversation
+                                                Append to Conversation
                                                         ↓
-                                               Context Compression (if needed)
+                                          Plan Tracking + Behavior Check
                                                         ↓
-                                               Loop or Finish
+                                                Context Compression (if needed)
+                                                        ↓
+                                                Loop or Finish
 ```
 
 ---
@@ -309,6 +320,24 @@ Batch delete by glob pattern (e.g. `delete all txts`):
 }
 ```
 
+### Show Changes
+```json
+{
+  "action": "show_changes",
+  "path": "."
+}
+```
+Lists all file changes made in the current session. Uses `git diff` if available, otherwise lists recently modified files. `path` is optional (defaults to workspace root).
+
+### Restore Backup
+```json
+{
+  "action": "restore_backup",
+  "path": "src/main.rs"
+}
+```
+Restores a file to its original state from git version control. Uses `git checkout` or `git restore` internally.
+
 ### HTTP Request
 ```json
 {
@@ -373,6 +402,24 @@ Prompts the user for approval.
 
 Modes are set via the `--mode` flag or configured in `settings.toml`.
 
+## Behavior Modes
+
+Behavior modes control *how* the agent approaches a task, independent of security modes. Set via `--behavior`:
+
+| Mode | Read-Only Phase | Requires Plan | Best For |
+|------|-----------------|---------------|----------|
+| **normal** (default) | No | No | General-purpose task execution |
+| **fix** | 5 iterations | No | Debugging and fixing broken code |
+| **research** | 5 iterations | No | Information gathering and analysis |
+| **refactor** | No | Yes | Code restructuring without changing behavior |
+| **tdd** | No | Yes | Writing tests before implementation |
+
+In read-only phases, the agent can read files, search, and explore but write/delete/copy operations are blocked. The model receives a system message explaining the restriction.
+
+Fix and Research modes include mode-specific guidance in the system prompt.
+
+---
+
 ## Context Compression
 
 To handle long conversations within limited context windows, vo1d implements **opencode-style context compression** that activates when the conversation exceeds ~80% of the model's context limit.
@@ -418,11 +465,23 @@ vo1d train 02_directory_ops       # Directory operations
 vo1d train 03_search_nav          # File search and navigation
 vo1d train 04_shell_basics        # Shell command basics
 vo1d train 05_web_basics          # Web search and fetch
-vo1d train 06_rust_fix            # Fix broken Rust projects
+vo1d train 06a_syntax             # Fix syntax errors
+vo1d train 06b_deps               # Fix dependency & import errors
+vo1d train 06c_logic              # Fix logic bugs
+vo1d train 06d_multi_file         # Fix multi-file projects
+vo1d train 06e_environment        # Fix build config issues
 vo1d train 07_project_setup       # Real-world project scaffolding
+
+# Or use the original curriculum (still available)
+vo1d train 06_rust_fix
 
 # Run all curricula in sequence (autotrain)
 vo1d train --all
+
+# Autotrain with failure policy
+vo1d train --all --on-failure stop    # Stop on first failure
+vo1d train --all --on-failure skip    # Skip failures (default)
+vo1d train --all --on-failure retry   # Retry up to 3 times
 
 # Manual mode — complete tasks yourself without an LLM model
 vo1d train 00_hello_world --manual
@@ -448,7 +507,8 @@ Curricula are JSON files with this structure:
         "check_file_exists": ["hello.txt"],
         "check_file_content": ["hello.txt::Hello, World!"],
         "check_directory_exists": ["src", "tests"],
-        "check_command_output": ["dir /b::hello.txt"]
+        "check_command_output": ["dir /b::hello.txt"],
+        "check_command_exit_code": ["cargo build 2>&1"]
       }
     }
   ]
@@ -462,6 +522,7 @@ Each task can have evaluation criteria (all fields accept arrays for multiple ch
 - `check_file_content`: File content checks in `"path::expected text"` format
 - `check_directory_exists`: Directories that must exist at specified paths
 - `check_command_output`: Command output checks in `"command::expected text"` format
+- `check_command_exit_code`: Commands that must exit with code 0 (for build/compile verification)
 
 ### Setup (Test Environments)
 
@@ -477,14 +538,15 @@ Tasks can include a `setup` field — shell commands that run in the sandbox **b
     "echo 'broken code' > src/main.rs"
   ],
   "evaluation": {
-    "check_command_output": ["cargo run 2>&1::Hello, world!"]
+    "check_command_exit_code": ["cargo run 2>&1"]
   }
 }
 ```
 
 ### Training Features
 
-- **Autotrain** (`--all` / `-a`): Run all 8 built-in curricula in sequence with automatic progression
+- **Autotrain** (`--all` / `-a`): Run all 12 built-in curricula in sequence with automatic progression
+- **Failure policy** (`--on-failure stop|skip|retry`): Control behavior when a curriculum fails
 - **Embedded curricula**: All curriculum JSON files are compiled into the binary — works even without the `curriculum/` folder on disk
 - **Manual mode** (`--manual`): Complete tasks yourself without an LLM model — the system prints each task, waits for you to create the files, then evaluates
 - **Sandboxed execution**: Each task runs in a clean sandbox directory
@@ -493,6 +555,8 @@ Tasks can include a `setup` field — shell commands that run in the sandbox **b
 - **Memory accumulation**: Task outcomes are stored in memory across the curriculum
 - **Solution storage**: Successful completions stored as solutions with full action sequences for future recall
 - **Mistake learning**: Failures recorded as mistakes with lessons and avoidance strategies
+- **Plan template recall**: Past solutions containing PLAN.md structures are recalled as plan templates before similar tasks
+- **Action sequence tracking**: Every solution and mistake records the sequence of actions taken, stored as a structured JSON array
 - **Similar experience recall**: Before each task, memory is searched for similar past problems and their solutions/lessons are injected into the prompt
 - **Progress tracking**: Shows task-by-task progress with success/failure indicators
 - **Self-improvement**: Successful patterns are stored as learned patterns in memory, boosted on repeat success
@@ -508,7 +572,12 @@ Tasks can include a `setup` field — shell commands that run in the sandbox **b
 | `03_search_nav` | File search and navigation | 3 tasks |
 | `04_shell_basics` | Shell command usage | 3 tasks |
 | `05_web_basics` | Web search and fetch | 2 tasks |
-| `06_rust_fix` | Fix broken Rust projects (setup commands) | 3 tasks |
+| `06_rust_fix` | Original combined Rust fix curriculum | 3 tasks |
+| `06a_syntax` | Fix syntax errors (semicolons, braces, typos) | 3 tasks |
+| `06b_deps` | Fix dependency & import errors | 3 tasks |
+| `06c_logic` | Fix logic bugs (off-by-one, wrong operators) | 3 tasks |
+| `06d_multi_file` | Fix multi-file project issues | 3 tasks |
+| `06e_environment` | Fix build config/environment issues | 3 tasks |
 | `07_project_setup` | Real-world project scaffolding | 3 tasks |
 
 ### Memory & Learning Integration
@@ -516,9 +585,30 @@ Tasks can include a `setup` field — shell commands that run in the sandbox **b
 Train mode uses the full learning memory system:
 - **Solutions**: Successful task completions are stored with extracted keyword tags for future recall
 - **Mistakes**: Failures are recorded with what went wrong, the lesson learned, and how to avoid it
+- **Action sequences**: Both solutions and mistakes store structured action sequences (as JSON arrays) — not just what happened but the exact steps taken
 - **Similar past experiences**: Before each task, the system searches memory for similar past problems and injects their solutions and lessons into the prompt
+- **Plan template matching**: Solutions containing PLAN.md-like structures (`## Step`, `## Plan`) are matched and injected as plan templates before similar tasks
 - **Patterns**: Successful patterns are stored with confidence scores that increase on repeated success
 - **Task history**: Outcome and execution time tracked across the curriculum
+
+---
+
+## PLAN.md Workflow
+
+vo1d supports a structured plan-driven workflow where the model creates and follows a PLAN.md file:
+
+1. **After iteration 1**, the loop checks if PLAN.md exists in the workspace
+2. **Parsing**: The `plan_parser` extracts steps from `## Step N:` headers, numbered lists, and checkbox items
+3. **Step tracking**: The loop tracks the current step, iteration count per step, and failure count per step
+4. **Dynamic iteration limits**: Per-step limits adjust based on task complexity (15/30/100 iterations for short/medium/complex tasks), capped by `max_iterations`
+5. **Stuck detection**: After 10 iterations on the same step, a warning message is injected
+6. **Plan recovery**: After 3 consecutive evaluation failures on the same step, a replanning suggestion message is injected
+7. **Checkbox updates**: The model is expected to update checkboxes (`[x]`) as it completes sub-tasks
+8. **Plan re-parsing**: If PLAN.md is rewritten, the plan is re-parsed and step tracking resets
+
+### Plan Templates from Memory
+
+Before complex tasks, memory is searched for past solutions that used PLAN.md. Matching plan structures are injected into the system prompt as templates, helping the model create better plans based on what worked before.
 
 ---
 
@@ -582,6 +672,9 @@ The `DocProvider` loads markdown files from the `docs/` directory at startup and
 Current docs:
 - `docs/file-ops.md` — File read/write/append/copy/delete patterns
 - `docs/directory-ops.md` — Directory creation, listing, navigation
+- `docs/planning.md` — PLAN.md format, when to plan, recovery strategies
+- `docs/fix-mode.md` — Fix behavior mode rules, diagnosis checklist
+- `docs/research-mode.md` — Research mode techniques and output format
 - `docs/self-improvement.md` — Learning from errors, retry strategies, memory usage
 
 ---
@@ -612,6 +705,9 @@ require_workspace_write_approval = true
 base_url = ""
 api_key = ""
 model_name = ""
+
+[defaults]
+behavior = "normal"       # Default behavior mode: normal, fix, research, refactor, tdd
 ```
 
 ---
@@ -626,17 +722,19 @@ vo1d features a **learning memory system** that persists across sessions and imp
 |-------|-------------|------|
 | **Task History** | Every task executed, with actions and outcome | `memory/task_history.json` |
 | **Patterns** | Learned patterns with confidence scores (boosted on reuse, capped at 50) | `memory/patterns.json` |
-| **Solutions** | Successful task solutions with keyword tags for similarity matching | `memory/solutions.json` |
-| **Mistakes** | Recorded failures with lessons learned and avoidance strategies (frequency-tracked) | `memory/mistakes.json` |
+| **Solutions** | Successful task solutions with keyword tags and action sequences for similarity matching | `memory/solutions.json` |
+| **Mistakes** | Recorded failures with lessons learned, avoidance strategies, and action sequences (frequency-tracked) | `memory/mistakes.json` |
 | **Notes** | User-curated notes with tags | `memory/notes.json` |
 | **Preferences** | Key-value settings learned from user interaction | `memory/preferences.json` |
 
 ### How Learning Works
 
 1. **During training**: Each task result is analyzed — successes are stored as solutions, failures as mistakes with lessons (e.g., "file not found" → "check the path exists before writing")
-2. **During execution**: If an action fails 2+ times consecutively, the error is automatically recorded as a mistake in persistent memory
-3. **During recall**: Before starting a task, the system searches stored solutions, mistakes, and notes for keyword overlap with the current task. Top matches are injected into the system prompt
-4. **Pattern reinforcement**: Repeated successes boost confidence scores on stored patterns; high-confidence patterns are shown in the memory summary
+2. **Action sequences**: Both solutions and mistakes store structured action sequences as JSON arrays, enabling rich traceability
+3. **During execution**: If an action fails 2+ times consecutively, the error is automatically recorded as a mistake in persistent memory
+4. **During recall**: Before starting a task, the system searches stored solutions, mistakes, and notes for keyword overlap with the current task. Top matches are injected into the system prompt
+5. **Plan template matching**: Solutions containing PLA N.md-like structures are detected and presented as plan templates before similar tasks
+6. **Pattern reinforcement**: Repeated successes boost confidence scores on stored patterns; high-confidence patterns are shown in the memory summary
 
 ### CLI Commands
 
@@ -745,18 +843,22 @@ Commands:
   logs      View audit logs
 
 Options:
-      --model <MODEL>       Override default model
-      --mode <MODE>         Security mode
-                              (safe, interactive, power-user, autonomous, yolo)
-      --workspace <DIR>     Custom workspace directory
-      --yolo                Enable YOLO mode (implies --mode yolo)
-      --yes                 Auto-approve all actions (Interactive/PowerUser only)
-      --debug               Enable verbose debug tracing
-      --resume <ID>         Resume a session by ID
-  -h, --help                Print help
-  -V, --version             Print version
+      --model <MODEL>           Override default model
+      --mode <MODE>             Security mode
+                                  (safe, interactive, power-user, autonomous, yolo)
+      --behavior <BEHAVIOR>     Behavior mode
+                                  (normal, fix, research, refactor, tdd)
+      --workspace <DIR>         Custom workspace directory
+      --yolo                    Enable YOLO mode (implies --mode yolo)
+      --yes                     Auto-approve all actions (Interactive/PowerUser only)
+      --debug                   Enable verbose debug tracing
+      --resume <ID>             Resume a session by ID
+  -h, --help                    Print help
+  -V, --version                 Print version
 
 Subcommands:
+  train --all --on-failure <POLICY>   Autotrain failure policy
+                                        (stop, skip, retry)
   models list               List all available models
   models install <id>       Download and install a model
   models remove <id>        Remove an installed model
@@ -813,6 +915,8 @@ The profiler checks:
                         │    Agent Loop       │
                         │  (ReAct + Compress  │
                         │   + Self-Correct)   │
+                        │   + Plan Tracking   │
+                        │   + Behavior Mode)  │
                         └──┬───────┬──────┬───┘
                            │       │      │
                     ┌──────▼──┐ ┌──▼──────▼──┐
@@ -825,7 +929,9 @@ The profiler checks:
                         │  Tool Executors     │
                         │ (file, cmd, http,   │
                         │  web_search,        │
-                        │  web_fetch)         │
+                        │  web_fetch,         │
+                        │  show_changes,      │
+                        │  restore_backup)    │
                         └─────────────────────┘
 ```
 
@@ -833,13 +939,15 @@ The profiler checks:
 
 - **CLI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or `vo1d train`.
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider. Cloned per task.
-- **Agent Loop**: Iterates up to `max_iterations` (no hardcoded limit). Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → context compression if needed.
+- **Agent Loop**: Iterates up to `max_iterations` per curriculum task. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking (PLAN.md step progress) → behavior mode enforcement (read-only phase) → context compression if needed.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Current implementations: `builtin` (llama.cpp via `llama-cpp-2`). Backends are pluggable.
-- **Tool System**: Registry of 14 available tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown).
+- **Tool System**: Registry of 16 available tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup.
 - **Security Manager**: Evaluates each action against the current mode. Can approve, ask, or block. All decisions are audited.
 - **Doc Provider**: Loads markdown documentation from `docs/` and injects into system prompt for better tool usage guidance.
-- **Memory System**: Cross-session learning memory — stores solutions, mistakes, notes, patterns, tracks action sequences for richer recall.
+- **Memory System**: Cross-session learning memory — stores solutions, mistakes, notes, patterns, tracks action sequences for richer recall, includes plan template matching.
 - **Self-Correction**: `FailureTracker` monitors consecutive failures per action type; `ErrorClassifier` and `error_suggestions` produce detailed markdown suggestions.
+- **Plan Parser**: Flexible markdown parser that extracts step headers, numbered lists, checkboxes, and action keywords from PLAN.md files.
+- **Behavior Engine**: Enforces read-only phases, plan requirements, and mode-specific system prompt notes based on behavior mode.
 - **Context Compressor**: Two-phase pruning + compacting when conversation exceeds ~80% of context limit.
 
 ---
@@ -895,6 +1003,7 @@ cargo test --features llamacpp-builtin
 | Model keeps generating infinite tool calls | The model may not be receiving the correct ChatML prompt. Check `add_bos_token` matches the model metadata. Qwen3 expects `<|im_start|>` tags |
 | LLM output is garbled or mixed with C library stderr | llama.cpp writes to stderr via CRT `fprintf`. vo1d suppresses this with `_dup2` at the CRT file-descriptor level; verify `stderr_guard.rs` compiled correctly |
 | Build fails with linker errors on Windows | You need MSVC build tools (Visual Studio Build Tools or Visual Studio). The `+crt-static` flag must NOT be in `.cargo/config.toml` |
+| Curriculum file not found on disk | All curricula are embedded in the binary — run `vo1d train <name>` and it loads from binary if disk file is missing |
 
 ---
 
