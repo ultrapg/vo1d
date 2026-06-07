@@ -405,6 +405,9 @@ Train mode provides a structured learning environment where vo1d works through p
 ### Using Train Mode
 
 ```bash
+# List available built-in curricula
+vo1d train
+
 # Run a built-in curriculum
 vo1d train 00_hello_world           # Basic file operations
 vo1d train 01_file_ops            # File read/write/append/copy
@@ -412,6 +415,9 @@ vo1d train 02_directory_ops       # Directory operations
 vo1d train 03_search_nav          # File search and navigation
 vo1d train 04_shell_basics        # Shell command basics
 vo1d train 05_web_basics          # Web search and fetch
+
+# Manual mode — complete tasks yourself without an LLM model
+vo1d train 00_hello_world --manual
 
 # Use a custom curriculum file
 vo1d train my_curriculum.json
@@ -450,6 +456,7 @@ Each task can have evaluation criteria (all fields accept arrays for multiple ch
 
 ### Training Features
 
+- **Manual mode** (`--manual`): Complete tasks yourself without an LLM model — the system prints each task, waits for you to create the files, then evaluates
 - **Sandboxed execution**: Each task runs in a clean sandbox directory
 - **Memory accumulation**: Task outcomes are stored in memory across the curriculum
 - **Progress tracking**: Shows task-by-task progress with success/failure indicators
@@ -688,7 +695,7 @@ The profiler checks:
                         └──┬───────┬──────┬───┘
                            │       │      │
                     ┌──────▼──┐ ┌──▼──────▼──┐
-                    │  LLM    │ │  Tool      │
+                    │   LLM   │ │  Tool      │
                     │ Backend │ │  System    │
                     └─────────┘ │  (registry)│
                                 └──┬─────────┘
