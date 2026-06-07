@@ -688,17 +688,17 @@ The profiler checks:
                         └──┬───────┬──────┬───┘
                            │       │      │
                     ┌──────▼──┐ ┌──▼──────▼──┐
-                    │  LLM   │ │  Tool      │
+                    │  LLM    │ │  Tool      │
                     │ Backend │ │  System    │
                     └─────────┘ │  (registry)│
-                               └──┬─────────┘
-                                  │
-                       ┌──────────▼──────────┐
-                       │  Tool Executors     │
-                       │ (file, cmd, http,   │
-                       │  web_search,        │
-                       │  web_fetch)         │
-                       └─────────────────────┘
+                                └──┬─────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │  Tool Executors     │
+                        │ (file, cmd, http,   │
+                        │  web_search,        │
+                        │  web_fetch)         │
+                        └─────────────────────┘
 ```
 
 ### Component Details
