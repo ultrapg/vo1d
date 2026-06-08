@@ -243,7 +243,9 @@ WORKFLOW:
 1. First, create a PLAN.md file in the sandbox that lists the steps you will take to complete this task
 2. Execute each step from the plan one at a time
 3. Check your work after each step
-4. When all steps are done, call finish"#,
+4. When all steps are done, call finish
+
+NOTE: write_file automatically creates parent directories — no need to use create_directory first."#,
         task.id,
         sandbox.display(),
         task.description,
@@ -356,6 +358,60 @@ fn print_summary(curriculum: &Curriculum, results: &[EvaluationResult]) {
         }
     }
     println!();
+}
+
+/// Test context compression by generating enough conversation to trigger it.
+/// This creates a task that deliberately fills the context window, then observes
+/// how the compression system handles it.
+pub async fn run_test_compression(ctx: AppContext) -> anyhow::Result<()> {
+    println!("\n=== CONTEXT COMPRESSION TEST ===");
+    println!("This test creates a task designed to fill the context window and trigger compression.\n");
+
+    let sandbox = ctx.paths.workspace_dir().join("compression_test");
+    let _ = std::fs::remove_dir_all(&sandbox);
+    std::fs::create_dir_all(&sandbox)?;
+
+    let task_desc = format!(
+        r#"COMPRESSION TEST TASK
+
+Work inside: {}
+
+Your goal is to demonstrate context compression by:
+1. First, list the workspace (it's empty)
+2. Create 15 files (file_1.txt through file_15.txt) each containing a long story about AI (at least 500 words each)
+3. Read back each file to verify the content
+4. The large amount of content should fill the context window and trigger compression
+
+This is a test — just keep going until you see the compression message or finish.
+
+Expected outcome: The agent handles context compression gracefully without crashing."#,
+        sandbox.display()
+    );
+
+    let mut train_ctx = ctx.clone();
+    train_ctx.paths = ctx.paths.with_workspace_override(sandbox.to_path_buf());
+
+    let session = crate::agent::session::Session::new(&task_desc, &train_ctx)?;
+    let result = crate::agent::loop_::agent_loop(train_ctx, session).await?;
+
+    println!("\n=== COMPRESSION TEST RESULT ===");
+    match result.status {
+        crate::agent::session::SessionStatus::Completed => {
+            println!("  ✓ Compression test passed — agent completed without crashing");
+        }
+        crate::agent::session::SessionStatus::Failed => {
+            println!("  ⚠ Compression test finished with status: Failed");
+            if let Some(ref out) = result.final_output {
+                println!("  Final output: {}", out);
+            }
+        }
+        other => {
+            println!("  ⚠ Compression test finished with status: {:?}", other);
+        }
+    }
+    println!();
+
+    Ok(())
 }
 
 #[cfg(test)]

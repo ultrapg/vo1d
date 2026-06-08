@@ -106,7 +106,7 @@ impl FailureTracker {
         let count = self.count(action_type);
         let suggestion = match action_type {
             "read_file" => "Try listing the directory first to verify the file exists and get the exact path.",
-            "write_file" => "Check that the directory exists, or use create_directory to make it first.",
+            "write_file" => "write_file automatically creates parent directories — just use write_file directly with the full path.",
             "delete_file" => "Verify the file exists. If deleting multiple files, list first to see what's there.",
             "execute_command" => "Try breaking the command into smaller steps, or check if you need a different approach.",
             "search_files" => "Try a simpler pattern like '*.txt' or list the directory first.",

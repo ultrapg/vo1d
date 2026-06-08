@@ -3,6 +3,7 @@ use crate::agent::parser::ToolParser;
 use crate::agent::plan_parser::PlanParser;
 use crate::agent::planner::Planner;
 use crate::agent::session::Session;
+use crate::core::compression::ContextCompressor;
 use crate::core::self_correction::{ErrorClassifier, FailureTracker};
 use crate::AppContext;
 use crate::models::action::Action;
@@ -55,9 +56,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         .context("Failed to create LLM backend")?;
 
     let supports_native_tools = llm.supports_tools();
-    let context_limit = (llm_config.context_size as f64 * 4.0 * 0.8) as usize;
+    let context_limit = (llm_config.context_size as f64 * 3.0) as usize;
     let system_prompt = build_system_prompt(&ctx, supports_native_tools);
-    let compressor = crate::core::compression::ContextCompressor::new(
+    let compressor = ContextCompressor::new(
         crate::core::compression::CompressionConfig::default()
     );
 
@@ -65,37 +66,18 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     let task_msg = Message::user(&session.base_task);
     conversation.push(task_msg);
 
-    // Dynamic iteration limit: complexity-based with hard cap
-    let task_len = session.base_task.len();
-    let dynamic_max = if task_len > 200 { 100 } else if task_len > 80 { 30 } else { 15 };
-    let max_iters = (ctx.config.max_iterations as usize).min(dynamic_max);
     let mut action_history: Vec<String> = Vec::new();
+    let max_iters: u64 = ctx.config.max_iterations as u64;
+    let mut iteration: u64 = 0;
 
-    for iteration in 0..max_iters {
+    loop {
         if cancel.is_cancelled() {
             session.status = crate::agent::session::SessionStatus::Cancelled;
             break;
         }
 
-        // Context compression at ~80% usage
-        let conv_chars: usize = conversation.iter().map(|m| m.content.len() + 100).sum();
-        if conv_chars > context_limit {
-            let before = conversation.len();
-            let (compressed, summary) = compressor.compress(&conversation, llm_config.context_size as usize);
-            conversation = compressed;
-            if !summary.is_empty() {
-                if let Ok(mut mem) = ctx.memory.lock() {
-                    mem.add_preference("_compressed_section", &summary.chars().take(500).collect::<String>());
-                }
-            }
-            if !session.tui_mode {
-                eprintln!("── [Context compressed: {} msgs → {} msgs] ──",
-                    before, conversation.len());
-            }
-        }
-
-        if iteration % 5 == 0 {
-            crate::agent::checkpoint::save_checkpoint(&ctx, &session, iteration)?;
+        if iteration > 0 && iteration % 5 == 0 {
+            crate::agent::checkpoint::save_checkpoint(&ctx, &session, iteration as usize)?;
         }
 
         // --- Plan state ---
@@ -115,7 +97,28 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 let step_desc = p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done");
                 format!(" [Step {}/{}: {}]", current_step + 1, p.steps.len(), step_desc)
             }).unwrap_or_default();
-            eprintln!("─── Iteration {}/{} {} {} ───", iteration + 1, max_iters, plan_info, plan_progress);
+
+            // Show iteration count (limitless — no max displayed)
+            eprintln!("─── Iteration {} {} {} ───", iteration + 1, plan_info, plan_progress);
+
+            // Show planner TODO in terminal if plan is loaded
+            if let Some(ref p) = plan {
+                let done_count = p.steps.iter().filter(|s| s.status == StepStatus::Completed).count();
+                let failed_count = p.steps.iter().filter(|s| s.status == StepStatus::Failed).count();
+                let pending_count = p.steps.len() - done_count - failed_count;
+                eprintln!("  Goal: {}", p.goal.chars().take(80).collect::<String>());
+                eprintln!("  Steps: {} done | {} pending | {} failed", done_count, pending_count, failed_count);
+                for (i, step) in p.steps.iter().enumerate() {
+                    let marker = match step.status {
+                        StepStatus::Completed => "✓",
+                        StepStatus::Failed => "✗",
+                        StepStatus::Running => "→",
+                        StepStatus::Pending | StepStatus::Skipped => "☐",
+                    };
+                    let current_marker = if i == current_step { " ← CURRENT" } else { "" };
+                    eprintln!("    {} {}. {}{}", marker, i + 1, step.description.chars().take(50).collect::<String>(), current_marker);
+                }
+            }
         }
 
         // --- Requires-plan enforcement (iteration 1+) ---
@@ -152,8 +155,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 String::new()
             };
 
-            // Per-step limit enforcement
-            let per_step_limit: u32 = if total_steps > 0 { (max_iters as u32 / total_steps as u32).max(5).min(20) } else { 20 };
+            // Per-step limit enforcement (generous — context compression handles overflow)
+            let per_step_limit: u32 = 100;
             let step_limit_note = if step_iter >= per_step_limit && plan.is_some() {
                 format!("\nYou have exceeded the iteration limit ({}) for this plan step. The step will be marked as failed. Move to the next step or replan.", per_step_limit)
             } else {
@@ -161,9 +164,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             };
 
             let progress_msg = format!(
-                "[Progress: step {}/{}{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]{}{}",
+                "[Iteration {}{}. Last action: {}{}. Original task: {}. Think about what to do next, then take ONE action.]{}{}",
                 iteration + 1,
-                max_iters,
                 plan_context,
                 prev_action.trim_end_matches('.'),
                 prev_result,
@@ -172,6 +174,85 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 step_limit_note,
             );
             conversation.push(Message::system(progress_msg));
+        }
+
+        // Context compression right before LLM call (after all messages added)
+        let conv_chars: usize = conversation.iter().map(|m| m.content.len() + 100).sum();
+        let usage_ratio = if context_limit > 0 { conv_chars as f64 / context_limit as f64 } else { 0.0 };
+
+        if usage_ratio > 0.90 && conversation.len() > 10 {
+            // --- LLM summarization at high usage ---
+            let summarization_range = compressor.summarization_range(&conversation);
+            if let Some((start, end, insert_at)) = summarization_range {
+                // Build summarization prompt from the slice
+                let summarize_slice: Vec<String> = conversation[start..end].iter()
+                    .map(|m| format!("[{}]: {}", m.role, m.content.chars().take(200).collect::<String>()))
+                    .collect();
+                let summary_prompt = format!(
+                    "Summarize the following conversation between a user and an AI assistant working on a task. \
+                     Focus on: what files were read/written, what commands were run, what decisions were made, \
+                     and what the current status is. Be concise but comprehensive.\n\nTask: {}\n\n{}",
+                    session.base_task,
+                    summarize_slice.join("\n")
+                );
+                let summary_messages = vec![
+                    crate::models::message::Message::system(
+                        "You are a conversation summarizer. Provide a concise structured summary."
+                    ),
+                    crate::models::message::Message::user(&summary_prompt),
+                ];
+
+                let summary_result = llm.chat(&summary_messages, None).await;
+                match summary_result {
+                    Ok(resp) => {
+                        let summary_text = resp.content.trim().to_string();
+                        if !summary_text.is_empty() {
+                            let before = conversation.len();
+                            conversation = ContextCompressor::inject_summary(
+                                conversation, &summary_text, start, end, insert_at
+                            );
+                            if let Ok(mut mem) = ctx.memory.lock() {
+                                mem.add_preference("_compressed_section",
+                                    &summary_text.chars().take(500).collect::<String>());
+                            }
+                            if !session.tui_mode {
+                                eprintln!("── [Context summarized: {} msgs → {} msgs] ──",
+                                    before, conversation.len());
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Fall back to old-style compression
+                        let before = conversation.len();
+                        let (compressed, summary) = compressor.compress(&conversation, llm_config.context_size as usize);
+                        conversation = compressed;
+                        if !summary.is_empty() {
+                            if let Ok(mut mem) = ctx.memory.lock() {
+                                mem.add_preference("_compressed_section",
+                                    &summary.chars().take(500).collect::<String>());
+                            }
+                        }
+                        if !session.tui_mode {
+                            eprintln!("── [Context compressed: {} msgs → {} msgs] ──",
+                                before, conversation.len());
+                        }
+                    }
+                }
+            }
+        } else if conv_chars > context_limit {
+            // Old-style compression for moderate overflow
+            let before = conversation.len();
+            let (compressed, summary) = compressor.compress(&conversation, llm_config.context_size as usize);
+            conversation = compressed;
+            if !summary.is_empty() {
+                if let Ok(mut mem) = ctx.memory.lock() {
+                    mem.add_preference("_compressed_section", &summary.chars().take(500).collect::<String>());
+                }
+            }
+            if !session.tui_mode {
+                eprintln!("── [Context compressed: {} msgs → {} msgs] ──",
+                    before, conversation.len());
+            }
         }
 
         let mut response_text = String::new();
@@ -258,6 +339,14 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             .rev()
             .take_while(|&a| a == action_type)
             .count();
+        if repeat_count >= 5 && !matches!(&action, Action::Finish { .. }) {
+            conversation.push(Message::system(
+                "CRITICAL: You have repeated this action 5+ times. Restarting this iteration — \
+                 clear your mind and try a completely different approach. Think step by step about what \
+                 would actually make progress, and do something you haven't tried yet."
+            ));
+            continue; // Restart iteration without incrementing counter
+        }
         if repeat_count >= 3 && !matches!(&action, Action::Finish { .. }) {
             let loop_warning = format!(
                 "WARNING: You performed '{}' {} times in a row. This is a loop. STOP this pattern and do something different. Try something different or call finish if the task is done.",
@@ -277,7 +366,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         // Behavioral mode: read-only phase enforcement
-        let read_only_until = behavior.read_only_iters();
+        let read_only_until = behavior.read_only_iters() as u64;
         if iteration < read_only_until && !matches!(&action, Action::Finish { .. }) {
             let is_write = matches!(&action,
                 Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }
@@ -351,7 +440,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         match policy_result {
             PolicyResult::Allow => {},
             PolicyResult::Ask => {
-                if !session.tui_mode {
+                if ctx.auto_approve {
+                    // --yes flag: auto-approve without prompting
+                } else if !session.tui_mode {
                     println!("\n[APPROVAL REQUIRED]\n{}", action.description());
                     println!("Approve? (y/n): ");
                     let mut input = String::new();
@@ -626,7 +717,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
             // Per-step iteration limit enforcement
             let step_iter = step_iterations[&(current_step as u32)];
-            let per_step_limit: u32 = if total_steps > 0 { (max_iters as u32 / total_steps as u32).max(5).min(20) } else { 20 };
+            let per_step_limit: u32 = 100;
             if step_iter >= per_step_limit {
                 if let Some(ref mut p) = plan {
                     Planner::fail_step(p, current_step, "Exceeded per-step iteration limit.".to_string());
@@ -652,13 +743,18 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             session.variables.insert("plan_goal".to_string(), p.goal.clone());
         }
         crate::agent::session::save_session_metadata(&ctx, &session)?;
-    }
 
-    // Check if we exited without completing
-    if session.status != crate::agent::session::SessionStatus::Completed {
-        if !cancel.is_cancelled() {
+        // Check loop exit conditions
+        if session.status != crate::agent::session::SessionStatus::Active {
+            break;
+        }
+
+        // Safety: break on absurdly high iteration count (catastrophic loop protection)
+        iteration += 1;
+        if iteration > max_iters {
             session.status = crate::agent::session::SessionStatus::Failed;
-            session.final_output = Some("Maximum iterations reached without task completion.".to_string());
+            session.final_output = Some("Safety limit reached: too many iterations without completion.".to_string());
+            break;
         }
     }
 
@@ -720,7 +816,7 @@ fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String 
 --- FILE OPERATIONS ---
 - read_file:      Read a file's contents
   JSON: {{"action": "read_file", "path": "file.txt"}}
-- write_file:     Write content to a file (creates if not exists)
+- write_file:     Write content to a file (creates file and parent dirs automatically)
   JSON: {{"action": "write_file", "path": "file.txt", "content": "..."}}
 - delete_file:    Delete a file or files matching a glob pattern
   JSON: {{"action": "delete_file", "path": "file.txt"}}

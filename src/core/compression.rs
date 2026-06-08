@@ -37,7 +37,7 @@ impl Default for CompressionConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            target_usage: 0.80,
+            target_usage: 0.70,
             min_recent_messages: 8,
             max_tool_output_chars: 2000,
         }
@@ -58,6 +58,67 @@ impl ContextCompressor {
         &self.config
     }
 
+    /// Calculate current context usage ratio (0.0–1.0) based on approximate char budget.
+    pub fn usage_ratio(&self, conversation: &[Message], context_size: usize) -> f64 {
+        let current_chars: usize = conversation.iter().map(|m| m.content.len() + 50).sum();
+        let char_budget = (context_size as f64 * self.config.target_usage * 3.5) as usize;
+        if char_budget == 0 { return 1.0; }
+        current_chars as f64 / char_budget as f64
+    }
+
+    /// Identify messages eligible for LLM summarization (old non-essential messages).
+    /// Returns (slice_start, slice_end, insert_at) indices into the conversation.
+    /// System prompt (0) and first user task (1) are always preserved.
+    /// The last `min_recent_messages` are also preserved.
+    pub fn summarization_range(&self, conversation: &[Message]) -> Option<(usize, usize, usize)> {
+        let total = conversation.len();
+        if total < 4 {
+            return None; // too small to bother
+        }
+        // Always keep system (0) and first user task (1)
+        let keep_prefix = 2;
+        // Keep recent messages
+        let keep_suffix = self.config.min_recent_messages.max(4);
+        if keep_prefix + keep_suffix >= total {
+            return None; // not enough messages to summarize
+        }
+        let slice_start = keep_prefix;
+        let slice_end = total.saturating_sub(keep_suffix);
+        if slice_end <= slice_start {
+            return None;
+        }
+        // Insert summary right after the preserved prefix
+        let insert_at = keep_prefix;
+        Some((slice_start, slice_end, insert_at))
+    }
+
+    /// Replace a range of messages with a summary message.
+    /// `slice_start`..`slice_end` is the range to remove, `summary` replaces them.
+    /// Returns the new conversation.
+    pub fn inject_summary(
+        conversation: Vec<Message>,
+        summary: &str,
+        slice_start: usize,
+        slice_end: usize,
+        insert_at: usize,
+    ) -> Vec<Message> {
+        let mut out: Vec<Message> = Vec::with_capacity(conversation.len().saturating_sub(slice_end - slice_start) + 1);
+        // Messages before insert_at
+        for msg in conversation.iter().take(insert_at) {
+            out.push(msg.clone());
+        }
+        // Summary marker
+        out.push(Message::system(&format!(
+            "[Summary of previous work: {}]",
+            summary
+        )));
+        // Messages after the removed range
+        for msg in conversation.iter().skip(slice_end) {
+            out.push(msg.clone());
+        }
+        out
+    }
+
     /// Compress a conversation to fit within the target token budget.
     /// Returns (compressed conversation, summary of what was removed).
     pub fn compress(&self, conversation: &[Message], context_size: usize) -> (Vec<Message>, String) {
@@ -66,7 +127,7 @@ impl ContextCompressor {
         }
 
         let token_budget = (context_size as f64 * self.config.target_usage) as usize;
-        let char_budget = token_budget * 4;
+        let char_budget = (token_budget as f64 * 3.5) as usize;
 
         // Phase 1: Prune oversized tool outputs
         let pruned = self.prune_tool_outputs(conversation);
@@ -250,6 +311,57 @@ mod tests {
         assert!(result.len() < conv.len());
         assert_eq!(result[0].role, "system");
         assert!(result.iter().any(|m| m.role == "user"));
+    }
+
+    #[test]
+    fn test_usage_ratio() {
+        let c = ContextCompressor::new(CompressionConfig::default());
+        let conv = vec![make_msg("system", "sys"), make_msg("user", "hello")];
+        let ratio = c.usage_ratio(&conv, 8192);
+        assert!(ratio < 0.1, "small conversation should have low usage ratio");
+    }
+
+    #[test]
+    fn test_summarization_range_small() {
+        let c = ContextCompressor::new(CompressionConfig::default());
+        let conv = vec![make_msg("system", "sys"), make_msg("user", "hi")];
+        assert!(c.summarization_range(&conv).is_none(), "too small for summarization");
+    }
+
+    #[test]
+    fn test_summarization_range_large() {
+        let c = ContextCompressor::new(CompressionConfig { min_recent_messages: 3, ..Default::default() });
+        let mut conv = vec![make_msg("system", "sys"), make_msg("user", "task")];
+        for i in 0..10 {
+            conv.push(make_msg("assistant", &format!("resp{}", i)));
+            conv.push(make_msg("tool", &format!("res{}", i)));
+        }
+        let range = c.summarization_range(&conv);
+        assert!(range.is_some(), "large conversation should have summarization range");
+        let (start, end, insert_at) = range.unwrap();
+        assert_eq!(start, 2, "should start after system+user");
+        assert_eq!(insert_at, 2, "should insert at index 2");
+        assert!(end > start, "slice should not be empty");
+    }
+
+    #[test]
+    fn test_inject_summary() {
+        let conv = vec![
+            make_msg("system", "sys"),
+            make_msg("user", "task"),
+            make_msg("assistant", "old step 1"),
+            make_msg("tool", "old result 1"),
+            make_msg("assistant", "old step 2"),
+            make_msg("tool", "old result 2"),
+            make_msg("assistant", "recent msg"),
+            make_msg("tool", "recent result"),
+        ];
+        let result = ContextCompressor::inject_summary(conv, "Did steps 1 and 2", 2, 6, 2);
+        assert_eq!(result.len(), 5, "should have sys, user, summary, recent 2 msgs");
+        assert!(result[2].content.contains("Summary of previous work"));
+        assert!(result[2].content.contains("Did steps 1 and 2"));
+        assert_eq!(result[3].content, "recent msg");
+        assert_eq!(result[4].content, "recent result");
     }
 
     #[test]

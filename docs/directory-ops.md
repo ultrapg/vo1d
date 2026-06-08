@@ -20,7 +20,7 @@ Use `search_files` to find files matching a glob pattern recursively:
 
 ## Best Practices
 
-- Create directories before writing files into them
+- write_file automatically creates parent directories — no need to call create_directory first
 - List before searching to understand the structure
 - Use `list_directory` with pattern for targeted listings
 - Search is recursive by default, use path to limit scope

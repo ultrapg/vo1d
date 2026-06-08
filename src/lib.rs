@@ -29,6 +29,8 @@ pub struct AppContext {
     pub audit: security::audit::AuditLogger,
     pub model_registry: llm::registry::ModelRegistry,
     pub memory: std::sync::Arc<std::sync::Mutex<core::memory::MemoryStore>>,
+    /// Auto-approve all actions (--yes flag)
+    pub auto_approve: bool,
 }
 
 impl AppContext {
@@ -53,6 +55,7 @@ impl AppContext {
             audit,
             model_registry,
             memory,
+            auto_approve: false,
         })
     }
 }

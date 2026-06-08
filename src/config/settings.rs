@@ -104,7 +104,7 @@ impl Default for Settings {
                 "reboot".to_string(),
             ],
             default_behavior: "normal".to_string(),
-            max_iterations: 50,
+            max_iterations: 999999,
             command_timeout_secs: 60,
             max_backups: 10,
         }
@@ -127,7 +127,7 @@ impl Default for BuiltinConfig {
             threads: -1,
             gpu_layers: -1,
             batch_size: 4096,
-            context_size: 4096,
+            context_size: 8192,
             temperature: 0.7,
             top_p: 0.9,
             top_k: 40,

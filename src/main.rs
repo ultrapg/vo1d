@@ -41,7 +41,7 @@ struct Cli {
     yolo: bool,
 
     /// Auto-approve all actions (Interactive/Power User only)
-    #[arg(long, global = true)]
+    #[arg(long, global = true, visible_alias = "jes")]
     yes: bool,
 
     /// Enable verbose debug tracing
@@ -64,6 +64,12 @@ enum SecurityModeArg {
     PowerUser,
     Autonomous,
     Yolo,
+}
+
+#[derive(Subcommand)]
+enum TestAction {
+    /// Test context compression by filling the context window then triggering compression
+    Compression,
 }
 
 #[derive(Subcommand)]
@@ -107,6 +113,11 @@ enum Commands {
         /// Number of recent log lines to show
         #[arg(long, default_value = "20")]
         tail: usize,
+    },
+    /// Run system tests
+    Test {
+        #[command(subcommand)]
+        action: Option<TestAction>,
     },
     /// Manage VO1D's memory and learning
     Memory {
@@ -198,6 +209,11 @@ async fn main() -> Result<()> {
         ctx.config.default_model = model_id.clone();
     }
 
+    // Auto-approve all actions if --yes flag is set
+    if cli.yes {
+        ctx.auto_approve = true;
+    }
+
     // Override workspace if provided
     if let Some(ws) = cli.workspace {
         std::fs::create_dir_all(&ws)
@@ -230,6 +246,13 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Config) => {
             run_config(ctx).await?;
+        }
+        Some(Commands::Test { action }) => {
+            match action {
+                Some(TestAction::Compression) | None => {
+                    vo1d::agent::train::run_test_compression(ctx).await?;
+                }
+            }
         }
         Some(Commands::Memory { action }) => {
             run_memory(ctx, action).await?;
