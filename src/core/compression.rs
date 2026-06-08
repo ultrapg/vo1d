@@ -38,7 +38,7 @@ impl Default for CompressionConfig {
         Self {
             enabled: true,
             target_usage: 0.20,
-            min_recent_messages: 8,
+            min_recent_messages: 4,
             max_tool_output_chars: 2000,
         }
     }

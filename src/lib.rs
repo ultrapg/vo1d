@@ -29,6 +29,7 @@ pub struct AppContext {
     pub audit: security::audit::AuditLogger,
     pub model_registry: llm::registry::ModelRegistry,
     pub memory: std::sync::Arc<std::sync::Mutex<core::memory::MemoryStore>>,
+    pub skill_registry: std::sync::Arc<std::sync::Mutex<tools::skills::SkillRegistry>>,
     /// Auto-approve all actions (--yes flag)
     pub auto_approve: bool,
 }
@@ -47,6 +48,10 @@ impl AppContext {
             core::memory::MemoryStore::new(&paths.memory_dir())?
         ));
 
+        let skill_registry = std::sync::Arc::new(std::sync::Mutex::new(
+            tools::skills::SkillRegistry::load(&paths)?
+        ));
+
         Ok(Self {
             config,
             paths,
@@ -55,6 +60,7 @@ impl AppContext {
             audit,
             model_registry,
             memory,
+            skill_registry,
             auto_approve: false,
         })
     }

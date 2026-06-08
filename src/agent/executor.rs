@@ -1,9 +1,12 @@
-use crate::models::action::Action;
+use crate::models::action::{Action, SkillStepDef};
+use crate::tools::skills::{Skill, SkillStep};
 use crate::AppContext;
 use crate::tools::files::FileOps;
 use crate::tools::shell::ShellExec;
 use crate::tools::registry::ToolRegistry;
 use anyhow::Result;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 /// Executes actions by dispatching to the appropriate tool.
@@ -11,7 +14,12 @@ pub struct ToolExecutor;
 
 impl ToolExecutor {
     /// Execute an action and return the output as a string.
-    pub async fn execute(action: &Action, ctx: &AppContext, _registry: &Arc<ToolRegistry>) -> Result<String> {
+    pub fn execute<'a>(
+        action: &'a Action,
+        ctx: &'a AppContext,
+        _registry: &'a Arc<ToolRegistry>,
+    ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
+        Box::pin(async move {
         match action {
             Action::ReadFile { path, start_line, end_line } => {
                 let expanded = ctx.paths.resolve_workspace_path(path);
@@ -90,6 +98,65 @@ impl ToolExecutor {
             Action::PlanStepComplete { .. } => Ok("Step completed (handled in loop)".to_string()),
             Action::PlanStepFail { .. } => Ok("Step failed (handled in loop)".to_string()),
             Action::PlanStatus { .. } => Ok("Plan status (handled in loop)".to_string()),
+            Action::CreateSkill { name, description, params_schema, steps } => {
+                let skill = Skill {
+                    name: name.clone(),
+                    description: description.clone(),
+                    params_schema: params_schema.clone().unwrap_or_default(),
+                    steps: steps.iter().map(|s: &SkillStepDef| SkillStep {
+                        tool: s.tool.clone(),
+                        args: s.args.clone(),
+                    }).collect(),
+                    created_at: chrono::Utc::now().to_rfc3339(),
+                };
+                let mut reg = ctx.skill_registry.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+                reg.create(skill)?;
+                Ok(format!("Skill '{}' created with {} steps", name, steps.len()))
+            }
+            Action::InvokeSkill { name, params } => {
+                let params = params.as_ref().cloned().unwrap_or(serde_json::Value::Object(Default::default()));
+                let steps = {
+                    let reg = ctx.skill_registry.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+                    reg.resolve_steps(name, &params)?
+                };
+                let mut outputs = Vec::new();
+                for (i, (action, tool_name)) in steps.iter().enumerate() {
+                    match ToolExecutor::execute(action, ctx, _registry).await {
+                        Ok(output) => outputs.push(output),
+                        Err(e) => {
+                            let partial = outputs.join("\n---\n");
+                            anyhow::bail!(
+                                "Skill '{}' failed at step {} ({}): {}\nPartial output:\n{}",
+                                name, i + 1, tool_name, e, partial,
+                            );
+                        }
+                    }
+                }
+                Ok(outputs.join("\n---\n"))
+            }
+            Action::ListSkills { keyword } => {
+                let reg = ctx.skill_registry.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+                let results = reg.list(keyword.as_deref());
+                if results.is_empty() {
+                    Ok("No skills found.".to_string())
+                } else {
+                    let mut out = String::new();
+                    for skill in results {
+                        out.push_str(&format!("- {}: {} ({} steps)\n", skill.name, skill.description, skill.steps.len()));
+                    }
+                    Ok(out.trim_end().to_string())
+                }
+            }
+            Action::DeleteSkill { name } => {
+                let mut reg = ctx.skill_registry.lock().map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
+                let existed = reg.delete(name)?;
+                if existed {
+                    Ok(format!("Skill '{}' deleted.", name))
+                } else {
+                    Ok(format!("Skill '{}' not found.", name))
+                }
+            }
         }
+        })
     }
 }

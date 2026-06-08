@@ -1,4 +1,18 @@
-﻿[[model]]
+﻿# =============================================================================
+# VO1D Model Catalog
+#
+# native_tools: whether the model supports native function-calling format
+#   (true = pass tool definitions via API/prompt; false = ReAct JSON simulation only)
+# supports_tools: whether the model can be used for tool-calling tasks at all
+# reasoning: whether the model uses chain-of-thought / think-then-respond
+# instruct: whether the model is instruction-tuned
+# =============================================================================
+
+# =============================================================================
+# Super-Small Models (< 1B params)
+# =============================================================================
+
+[[model]]
 id = "tinyl_1b"
 name = "TinyLlama 1.1B Chat"
 provider = "llamacpp"
@@ -9,9 +23,60 @@ size_bytes = 780000000
 min_ram_gb = 2.0
 context_length = 2048
 supports_tools = false
+native_tools = false
 reasoning = false
 instruct = true
 quantization = "Q4_K_M"
+
+[[model]]
+id = "tinyl_1b-q2_k"
+name = "TinyLlama 1.1B Chat (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf"
+filename = "tinyllama-1.1b-chat-v1.0.Q2_K.gguf"
+sha256 = ""
+size_bytes = 420000000
+min_ram_gb = 1.0
+context_length = 2048
+supports_tools = false
+native_tools = false
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "tinyl_1b-q5_k_m"
+name = "TinyLlama 1.1B Chat (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q5_K_M.gguf"
+filename = "tinyllama-1.1b-chat-v1.0.Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 920000000
+min_ram_gb = 2.0
+context_length = 2048
+supports_tools = false
+native_tools = false
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "tinyl_1b-q8_0"
+name = "TinyLlama 1.1B Chat (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q8_0.gguf"
+filename = "tinyllama-1.1b-chat-v1.0.Q8_0.gguf"
+sha256 = ""
+size_bytes = 1400000000
+min_ram_gb = 3.0
+context_length = 2048
+supports_tools = false
+native_tools = false
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- SmolLM2 ---
 
 [[model]]
 id = "smol_135m"
@@ -24,6 +89,7 @@ size_bytes = 150000000
 min_ram_gb = 1.0
 context_length = 2048
 supports_tools = false
+native_tools = false
 reasoning = false
 instruct = false
 quantization = "Q8_0"
@@ -39,6 +105,7 @@ size_bytes = 390000000
 min_ram_gb = 1.5
 context_length = 2048
 supports_tools = false
+native_tools = false
 reasoning = false
 instruct = false
 quantization = "Q8_0"
@@ -54,9 +121,132 @@ size_bytes = 1000000000
 min_ram_gb = 4.0
 context_length = 4096
 supports_tools = false
+native_tools = false
 reasoning = false
 instruct = false
 quantization = "Q4_K_M"
+
+# =============================================================================
+# Small Instruct Models (1B–3B) with native tool support
+# =============================================================================
+
+# --- Llama 3.2 1B ---
+
+[[model]]
+id = "llama3.2_1b"
+name = "Llama 3.2 1B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+filename = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 780000000
+min_ram_gb = 2.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3.2_1b-q2_k"
+name = "Llama 3.2 1B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q2_K.gguf"
+filename = "Llama-3.2-1B-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 430000000
+min_ram_gb = 1.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "llama3.2_1b-q5_k_m"
+name = "Llama 3.2 1B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q5_K_M.gguf"
+filename = "Llama-3.2-1B-Instruct-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 950000000
+min_ram_gb = 2.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "llama3.2_1b-q8_0"
+name = "Llama 3.2 1B Instruct (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q8_0.gguf"
+filename = "Llama-3.2-1B-Instruct-Q8_0.gguf"
+sha256 = ""
+size_bytes = 1400000000
+min_ram_gb = 3.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Llama 3.2 3B ---
+
+[[model]]
+id = "llama3.2_3b"
+name = "Llama 3.2 3B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+filename = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 2000000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3.2_3b-q2_k"
+name = "Llama 3.2 3B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q2_K.gguf"
+filename = "Llama-3.2-3B-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 1100000000
+min_ram_gb = 2.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "llama3.2_3b-q5_k_m"
+name = "Llama 3.2 3B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q5_K_M.gguf"
+filename = "Llama-3.2-3B-Instruct-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 2400000000
+min_ram_gb = 5.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- Qwen 2.5 1.5B (existing + new quants) ---
 
 [[model]]
 id = "qwen25_1.5b"
@@ -69,9 +259,92 @@ size_bytes = 1100000000
 min_ram_gb = 4.0
 context_length = 4096
 supports_tools = true
+native_tools = true
 reasoning = false
 instruct = true
 quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen25_1.5b-q2_k"
+name = "Qwen 2.5 1.5B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q2_k.gguf"
+filename = "qwen2.5-1.5b-instruct-q2_k.gguf"
+sha256 = ""
+size_bytes = 650000000
+min_ram_gb = 2.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_1.5b-q3_k_m"
+name = "Qwen 2.5 1.5B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-1.5b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 800000000
+min_ram_gb = 3.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_1.5b-q4_k_m"
+name = "Qwen 2.5 1.5B Instruct (Q4_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 990000000
+min_ram_gb = 3.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_1.5b-q6_k"
+name = "Qwen 2.5 1.5B Instruct (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q6_k.gguf"
+filename = "qwen2.5-1.5b-instruct-q6_k.gguf"
+sha256 = ""
+size_bytes = 1300000000
+min_ram_gb = 4.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+[[model]]
+id = "qwen25_1.5b-q8_0"
+name = "Qwen 2.5 1.5B Instruct (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q8_0.gguf"
+filename = "qwen2.5-1.5b-instruct-q8_0.gguf"
+sha256 = ""
+size_bytes = 1700000000
+min_ram_gb = 5.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Qwen 2.5 3B (existing + new quants) ---
 
 [[model]]
 id = "qwen25_3b"
@@ -84,268 +357,306 @@ size_bytes = 2100000000
 min_ram_gb = 6.0
 context_length = 8192
 supports_tools = true
+native_tools = true
 reasoning = false
 instruct = true
 quantization = "Q5_K_M"
 
 [[model]]
-id = "qwen25_7b"
-name = "Qwen 2.5 7B Instruct"
+id = "qwen25_3b-q2_k"
+name = "Qwen 2.5 3B Instruct (Q2_K)"
 provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
-filename = "qwen2.5-7b-instruct-q4_k_m.gguf"
-sha256 = ""
-size_bytes = 4800000000
-min_ram_gb = 12.0
-context_length = 8192
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "qwen25_14b"
-name = "Qwen 2.5 14B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q4_k_m.gguf"
-filename = "qwen2.5-14b-instruct-q4_k_m.gguf"
-sha256 = ""
-size_bytes = 9200000000
-min_ram_gb = 20.0
-context_length = 16384
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "qwen25_32b"
-name = "Qwen 2.5 32B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q4_k_m.gguf"
-filename = "qwen2.5-32b-instruct-q4_k_m.gguf"
-sha256 = ""
-size_bytes = 20000000000
-min_ram_gb = 32.0
-context_length = 32768
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "gemma3_1b"
-name = "Gemma 3 1B IT"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf"
-filename = "gemma-3-1b-it-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 780000000
-min_ram_gb = 4.0
-context_length = 8192
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "gemma3_4b"
-name = "Gemma 3 4B IT"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf"
-filename = "gemma-3-4b-it-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 2700000000
-min_ram_gb = 8.0
-context_length = 8192
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "gemma3_12b"
-name = "Gemma 3 12B IT"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf"
-filename = "gemma-3-12b-it-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 7300000000
-min_ram_gb = 16.0
-context_length = 16384
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "llama3_8b"
-name = "Llama 3 8B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
-filename = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 4900000000
-min_ram_gb = 12.0
-context_length = 8192
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "llama3_70b"
-name = "Llama 3 70B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/Meta-Llama-3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
-filename = "Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 39000000000
-min_ram_gb = 48.0
-context_length = 16384
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "mistral_7b"
-name = "Mistral 7B Instruct v0.3"
-provider = "llamacpp"
-download_url = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/mistral-7b-instruct-v0.3.Q4_K_M.gguf"
-filename = "mistral-7b-instruct-v0.3.Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 4300000000
-min_ram_gb = 12.0
-context_length = 32768
-supports_tools = true
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "deepseek_r1_1.5b"
-name = "DeepSeek R1 Distill Qwen 1.5B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"
-filename = "DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q2_k.gguf"
+filename = "qwen2.5-3b-instruct-q2_k.gguf"
 sha256 = ""
 size_bytes = 1200000000
 min_ram_gb = 4.0
 context_length = 8192
-supports_tools = false
-reasoning = true
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_3b-q3_k_m"
+name = "Qwen 2.5 3B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-3b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 1500000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_3b-q4_k_m"
+name = "Qwen 2.5 3B Instruct (Q4_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-3b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 1800000000
+min_ram_gb = 5.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_3b-q6_k"
+name = "Qwen 2.5 3B Instruct (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q6_k.gguf"
+filename = "qwen2.5-3b-instruct-q6_k.gguf"
+sha256 = ""
+size_bytes = 2400000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+[[model]]
+id = "qwen25_3b-q8_0"
+name = "Qwen 2.5 3B Instruct (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q8_0.gguf"
+filename = "qwen2.5-3b-instruct-q8_0.gguf"
+sha256 = ""
+size_bytes = 3500000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Qwen 2.5 Coder 7B ---
+
+[[model]]
+id = "qwen25_coder_7b"
+name = "Qwen 2.5 Coder 7B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 4700000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_coder_7b-q2_k"
+name = "Qwen 2.5 Coder 7B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q2_k.gguf"
+filename = "qwen2.5-coder-7b-instruct-q2_k.gguf"
+sha256 = ""
+size_bytes = 2700000000
+min_ram_gb = 6.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_coder_7b-q3_k_m"
+name = "Qwen 2.5 Coder 7B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-coder-7b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 3300000000
+min_ram_gb = 8.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_coder_7b-q5_k_m"
+name = "Qwen 2.5 Coder 7B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-coder-7b-instruct-q5_k_m.gguf"
+sha256 = ""
+size_bytes = 5600000000
+min_ram_gb = 14.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
 instruct = true
 quantization = "Q5_K_M"
 
 [[model]]
-id = "deepseek_r1_7b"
-name = "DeepSeek R1 Distill Qwen 7B"
+id = "qwen25_coder_7b-q6_k"
+name = "Qwen 2.5 Coder 7B Instruct (Q6_K)"
 provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
-filename = "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q6_k.gguf"
+filename = "qwen2.5-coder-7b-instruct-q6_k.gguf"
+sha256 = ""
+size_bytes = 6500000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+# --- Phi-4-mini 5B ---
+
+[[model]]
+id = "phi4_mini_5b"
+name = "Phi-4 Mini Instruct 5B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf"
+filename = "microsoft_Phi-4-mini-instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 2490000000
+min_ram_gb = 6.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "phi4_mini_5b-q2_k"
+name = "Phi-4 Mini Instruct 5B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q2_K.gguf"
+filename = "microsoft_Phi-4-mini-instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 1400000000
+min_ram_gb = 4.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "phi4_mini_5b-q3_k_m"
+name = "Phi-4 Mini Instruct 5B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q3_K_M.gguf"
+filename = "microsoft_Phi-4-mini-instruct-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 1750000000
+min_ram_gb = 5.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "phi4_mini_5b-q5_k_m"
+name = "Phi-4 Mini Instruct 5B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q5_K_M.gguf"
+filename = "microsoft_Phi-4-mini-instruct-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 3000000000
+min_ram_gb = 7.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "phi4_mini_5b-q6_k"
+name = "Phi-4 Mini Instruct 5B (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/microsoft_Phi-4-mini-instruct-GGUF/resolve/main/microsoft_Phi-4-mini-instruct-Q6_K.gguf"
+filename = "microsoft_Phi-4-mini-instruct-Q6_K.gguf"
+sha256 = ""
+size_bytes = 3500000000
+min_ram_gb = 8.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+# --- Yi 1.5 6B ---
+
+[[model]]
+id = "yi1.5_6b"
+name = "Yi 1.5 6B Chat"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Yi-1.5-6B-Chat-GGUF/resolve/main/Yi-1.5-6B-Chat-Q4_K_M.gguf"
+filename = "Yi-1.5-6B-Chat-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 3800000000
+min_ram_gb = 8.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "yi1.5_6b-q2_k"
+name = "Yi 1.5 6B Chat (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Yi-1.5-6B-Chat-GGUF/resolve/main/Yi-1.5-6B-Chat-Q2_K.gguf"
+filename = "Yi-1.5-6B-Chat-Q2_K.gguf"
+sha256 = ""
+size_bytes = 2100000000
+min_ram_gb = 5.0
+context_length = 4096
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "yi1.5_6b-q5_k_m"
+name = "Yi 1.5 6B Chat (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Yi-1.5-6B-Chat-GGUF/resolve/main/Yi-1.5-6B-Chat-Q5_K_M.gguf"
+filename = "Yi-1.5-6B-Chat-Q5_K_M.gguf"
 sha256 = ""
 size_bytes = 4600000000
-min_ram_gb = 12.0
-context_length = 8192
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "deepseek_r1_14b"
-name = "DeepSeek R1 Distill Qwen 14B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
-filename = "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 8800000000
-min_ram_gb = 20.0
-context_length = 16384
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "phi3_3.8b"
-name = "Phi-3 Mini Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
-filename = "Phi-3-mini-4k-instruct-q4.gguf"
-sha256 = ""
-size_bytes = 2400000000
-min_ram_gb = 6.0
+min_ram_gb = 10.0
 context_length = 4096
-supports_tools = false
+supports_tools = true
+native_tools = true
 reasoning = false
 instruct = true
-quantization = "Q4_K_M"
+quantization = "Q5_K_M"
 
-[[model]]
-id = "stablelm_3b"
-name = "StableLM Zephyr 3B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/TheBloke/stablelm-zephyr-3b-GGUF/resolve/main/stablelm-zephyr-3b.Q4_K_M.gguf"
-filename = "stablelm-zephyr-3b.Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 2000000000
-min_ram_gb = 6.0
-context_length = 4096
-supports_tools = false
-reasoning = false
-instruct = true
-quantization = "Q4_K_M"
-
-# =============================================================================
-# Reasoning Models (DeepSeek R1, QwQ, Qwen3, MiniCPM3, Falcon3)
-# =============================================================================
-
-[[model]]
-id = "deepseek_r1_32b"
-name = "DeepSeek R1 Distill Qwen 32B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
-filename = "DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 21300000000
-min_ram_gb = 24.0
-context_length = 16384
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "deepseek_r1_8b"
-name = "DeepSeek R1 Distill Llama 8B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"
-filename = "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 5150000000
-min_ram_gb = 12.0
-context_length = 16384
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "qwq_32b"
-name = "QwQ 32B Preview"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/QwQ-32B-Preview-GGUF/resolve/main/QwQ-32B-Preview-Q4_K_M.gguf"
-filename = "QwQ-32B-Preview-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 21300000000
-min_ram_gb = 24.0
-context_length = 32768
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
+# --- Other small models ---
 
 [[model]]
 id = "qwen3_0.6b"
@@ -358,6 +669,7 @@ size_bytes = 670000000
 min_ram_gb = 1.0
 context_length = 32768
 supports_tools = true
+native_tools = true
 reasoning = true
 instruct = true
 quantization = "Q8_0"
@@ -373,145 +685,23 @@ size_bytes = 1580000000
 min_ram_gb = 4.0
 context_length = 32768
 supports_tools = true
+native_tools = true
 reasoning = true
 instruct = true
 quantization = "Q5_K_M"
 
 [[model]]
-id = "qwen3_4b"
-name = "Qwen3 4B"
+id = "gemma3_1b"
+name = "Gemma 3 1B IT"
 provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q5_K_M.gguf"
-filename = "Qwen3-4B-Q5_K_M.gguf"
+download_url = "https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf"
+filename = "gemma-3-1b-it-Q4_K_M.gguf"
 sha256 = ""
-size_bytes = 2900000000
-min_ram_gb = 6.0
-context_length = 32768
-supports_tools = true
-reasoning = true
-instruct = true
-quantization = "Q5_K_M"
-
-[[model]]
-id = "qwen3_8b"
-name = "Qwen3 8B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"
-filename = "Qwen3-8B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 5370000000
-min_ram_gb = 12.0
-context_length = 32768
-supports_tools = true
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "qwen3_14b"
-name = "Qwen3 14B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q4_K_M.gguf"
-filename = "Qwen3-14B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 9660000000
-min_ram_gb = 16.0
-context_length = 32768
-supports_tools = true
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "qwen3_32b"
-name = "Qwen3 32B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/Qwen/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_M.gguf"
-filename = "Qwen3-32B-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 21200000000
-min_ram_gb = 24.0
-context_length = 32768
-supports_tools = true
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "minicpm3_4b"
-name = "MiniCPM3 4B"
-provider = "llamacpp"
-download_url = "https://huggingface.co/QuantFactory/MiniCPM3-4B-GGUF/resolve/main/MiniCPM3-4B.Q4_K_M.gguf"
-filename = "MiniCPM3-4B.Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 2680000000
-min_ram_gb = 6.0
+size_bytes = 780000000
+min_ram_gb = 4.0
 context_length = 8192
 supports_tools = true
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "falcon3_3b"
-name = "Falcon3 3B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/Falcon3-3B-Instruct-GGUF/resolve/main/Falcon3-3B-Instruct-Q4_K_M.gguf"
-filename = "Falcon3-3B-Instruct-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 2150000000
-min_ram_gb = 6.0
-context_length = 8192
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "falcon3_7b"
-name = "Falcon3 7B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/Falcon3-7B-Instruct-GGUF/resolve/main/Falcon3-7B-Instruct-Q4_K_M.gguf"
-filename = "Falcon3-7B-Instruct-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 4900000000
-min_ram_gb = 12.0
-context_length = 8192
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-[[model]]
-id = "falcon3_10b"
-name = "Falcon3 10B Instruct"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/Falcon3-10B-Instruct-GGUF/resolve/main/Falcon3-10B-Instruct-Q4_K_M.gguf"
-filename = "Falcon3-10B-Instruct-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 6750000000
-min_ram_gb = 12.0
-context_length = 8192
-supports_tools = false
-reasoning = true
-instruct = true
-quantization = "Q4_K_M"
-
-# =============================================================================
-# Non-Reasoning Models (Gemma, Granite, Command R, Nemotron)
-# =============================================================================
-
-[[model]]
-id = "gemma3_27b"
-name = "Gemma 3 27B IT"
-provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/gemma-3-27b-it-GGUF/resolve/main/gemma-3-27b-it-Q4_K_M.gguf"
-filename = "gemma-3-27b-it-Q4_K_M.gguf"
-sha256 = ""
-size_bytes = 17180000000
-min_ram_gb = 24.0
-context_length = 16384
-supports_tools = true
+native_tools = true
 reasoning = false
 instruct = true
 quantization = "Q4_K_M"
@@ -527,36 +717,39 @@ size_bytes = 1720000000
 min_ram_gb = 4.0
 context_length = 8192
 supports_tools = false
+native_tools = false
 reasoning = false
 instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
-id = "granite_8b"
-name = "Granite 3.0 8B Instruct"
+id = "stablelm_3b"
+name = "StableLM Zephyr 3B"
 provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/granite-3.0-8b-instruct-GGUF/resolve/main/granite-3.0-8b-instruct-Q4_K_M.gguf"
-filename = "granite-3.0-8b-instruct-Q4_K_M.gguf"
+download_url = "https://huggingface.co/TheBloke/stablelm-zephyr-3b-GGUF/resolve/main/stablelm-zephyr-3b.Q4_K_M.gguf"
+filename = "stablelm-zephyr-3b.Q4_K_M.gguf"
 sha256 = ""
-size_bytes = 5300000000
-min_ram_gb = 12.0
-context_length = 8192
+size_bytes = 2000000000
+min_ram_gb = 6.0
+context_length = 4096
 supports_tools = false
+native_tools = false
 reasoning = false
 instruct = true
 quantization = "Q4_K_M"
 
 [[model]]
-id = "command_r7b"
-name = "Command R 7B"
+id = "phi3_3.8b"
+name = "Phi-3 Mini Instruct"
 provider = "llamacpp"
-download_url = "https://huggingface.co/bartowski/c4ai-command-r7b-12-2024-GGUF/resolve/main/c4ai-command-r7b-12-2024-Q4_K_M.gguf"
-filename = "c4ai-command-r7b-12-2024-Q4_K_M.gguf"
+download_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+filename = "Phi-3-mini-4k-instruct-q4.gguf"
 sha256 = ""
-size_bytes = 5430000000
-min_ram_gb = 12.0
-context_length = 16384
-supports_tools = true
+size_bytes = 2400000000
+min_ram_gb = 6.0
+context_length = 4096
+supports_tools = false
+native_tools = false
 reasoning = false
 instruct = true
 quantization = "Q4_K_M"
@@ -572,6 +765,2195 @@ size_bytes = 2680000000
 min_ram_gb = 6.0
 context_length = 8192
 supports_tools = false
+native_tools = false
 reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# =============================================================================
+# Medium Models (4B–9B) with native tool support
+# =============================================================================
+
+# --- Qwen 2.5 7B (existing + new quants) ---
+
+[[model]]
+id = "qwen25_7b"
+name = "Qwen 2.5 7B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-7b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 4800000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_7b-q2_k"
+name = "Qwen 2.5 7B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q2_k.gguf"
+filename = "qwen2.5-7b-instruct-q2_k.gguf"
+sha256 = ""
+size_bytes = 2700000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_7b-q3_k_m"
+name = "Qwen 2.5 7B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-7b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 3400000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_7b-q5_k_m"
+name = "Qwen 2.5 7B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-7b-instruct-q5_k_m.gguf"
+sha256 = ""
+size_bytes = 5700000000
+min_ram_gb = 14.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen25_7b-q6_k"
+name = "Qwen 2.5 7B Instruct (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q6_k.gguf"
+filename = "qwen2.5-7b-instruct-q6_k.gguf"
+sha256 = ""
+size_bytes = 6700000000
+min_ram_gb = 16.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+[[model]]
+id = "qwen25_7b-q8_0"
+name = "Qwen 2.5 7B Instruct (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q8_0.gguf"
+filename = "qwen2.5-7b-instruct-q8_0.gguf"
+sha256 = ""
+size_bytes = 8900000000
+min_ram_gb = 20.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Qwen3 4B (existing + quants) ---
+
+[[model]]
+id = "qwen3_4b"
+name = "Qwen3 4B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q5_K_M.gguf"
+filename = "Qwen3-4B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 2900000000
+min_ram_gb = 6.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen3_4b-q2_k"
+name = "Qwen3 4B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q2_K.gguf"
+filename = "Qwen3-4B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 1700000000
+min_ram_gb = 4.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen3_4b-q3_k_m"
+name = "Qwen3 4B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q3_K_M.gguf"
+filename = "Qwen3-4B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 2100000000
+min_ram_gb = 5.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen3_4b-q4_k_m"
+name = "Qwen3 4B (Q4_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf"
+filename = "Qwen3-4B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 2500000000
+min_ram_gb = 6.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_4b-q6_k"
+name = "Qwen3 4B (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q6_K.gguf"
+filename = "Qwen3-4B-Q6_K.gguf"
+sha256 = ""
+size_bytes = 3400000000
+min_ram_gb = 8.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q6_K"
+
+# --- Gemma 3 4B (existing + quants) ---
+
+[[model]]
+id = "gemma3_4b"
+name = "Gemma 3 4B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf"
+filename = "gemma-3-4b-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 2700000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma3_4b-q2_k"
+name = "Gemma 3 4B IT (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q2_K.gguf"
+filename = "gemma-3-4b-it-Q2_K.gguf"
+sha256 = ""
+size_bytes = 1500000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "gemma3_4b-q3_k_m"
+name = "Gemma 3 4B IT (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q3_K_M.gguf"
+filename = "gemma-3-4b-it-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 1900000000
+min_ram_gb = 5.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "gemma3_4b-q5_k_m"
+name = "Gemma 3 4B IT (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q5_K_M.gguf"
+filename = "gemma-3-4b-it-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 3200000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "gemma3_4b-q6_k"
+name = "Gemma 3 4B IT (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q6_K.gguf"
+filename = "gemma-3-4b-it-Q6_K.gguf"
+sha256 = ""
+size_bytes = 3800000000
+min_ram_gb = 9.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+# --- Gemma 4 E2B (5.1B effective) ---
+
+[[model]]
+id = "gemma4_e2b"
+name = "Gemma 4 E2B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+filename = "google_gemma-4-E2B-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 3460000000
+min_ram_gb = 8.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma4_e2b-q2_k"
+name = "Gemma 4 E2B IT (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q2_K.gguf"
+filename = "google_gemma-4-E2B-it-Q2_K.gguf"
+sha256 = ""
+size_bytes = 1700000000
+min_ram_gb = 4.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "gemma4_e2b-q3_k_m"
+name = "Gemma 4 E2B IT (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q3_K_M.gguf"
+filename = "google_gemma-4-E2B-it-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 2400000000
+min_ram_gb = 6.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "gemma4_e2b-q5_k_m"
+name = "Gemma 4 E2B IT (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q5_K_M.gguf"
+filename = "google_gemma-4-E2B-it-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 4200000000
+min_ram_gb = 10.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "gemma4_e2b-q6_k"
+name = "Gemma 4 E2B IT (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q6_K.gguf"
+filename = "google_gemma-4-E2B-it-Q6_K.gguf"
+sha256 = ""
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+[[model]]
+id = "gemma4_e2b-q8_0"
+name = "Gemma 4 E2B IT (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q8_0.gguf"
+filename = "google_gemma-4-E2B-it-Q8_0.gguf"
+sha256 = ""
+size_bytes = 6500000000
+min_ram_gb = 14.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Gemma 4 E4B (8B effective) ---
+
+[[model]]
+id = "gemma4_e4b"
+name = "Gemma 4 E4B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q4_K_M.gguf"
+filename = "google_gemma-4-E4B-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 5410000000
+min_ram_gb = 12.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma4_e4b-q2_k"
+name = "Gemma 4 E4B IT (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q2_K.gguf"
+filename = "google_gemma-4-E4B-it-Q2_K.gguf"
+sha256 = ""
+size_bytes = 2700000000
+min_ram_gb = 6.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "gemma4_e4b-q3_k_m"
+name = "Gemma 4 E4B IT (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q3_K_M.gguf"
+filename = "google_gemma-4-E4B-it-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 3800000000
+min_ram_gb = 8.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "gemma4_e4b-q5_k_m"
+name = "Gemma 4 E4B IT (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q5_K_M.gguf"
+filename = "google_gemma-4-E4B-it-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 6500000000
+min_ram_gb = 14.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "gemma4_e4b-q6_k"
+name = "Gemma 4 E4B IT (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q6_K.gguf"
+filename = "google_gemma-4-E4B-it-Q6_K.gguf"
+sha256 = ""
+size_bytes = 7600000000
+min_ram_gb = 16.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+[[model]]
+id = "gemma4_e4b-q8_0"
+name = "Gemma 4 E4B IT (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-E4B-it-GGUF/resolve/main/google_gemma-4-E4B-it-Q8_0.gguf"
+filename = "google_gemma-4-E4B-it-Q8_0.gguf"
+sha256 = ""
+size_bytes = 10000000000
+min_ram_gb = 20.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Gemma 4 12B ---
+
+[[model]]
+id = "gemma4_12b"
+name = "Gemma 4 12B Unified IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-12B-it-GGUF/resolve/main/google_gemma-4-12B-it-Q4_K_M.gguf"
+filename = "google_gemma-4-12B-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 7800000000
+min_ram_gb = 16.0
+context_length = 262144
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- Gemma 4 26B A4B (MoE, 4B active) ---
+
+[[model]]
+id = "gemma4_26b"
+name = "Gemma 4 26B A4B MoE IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-26b-a4b-it-GGUF/resolve/main/google_gemma-4-26b-a4b-it-Q4_K_M.gguf"
+filename = "google_gemma-4-26b-a4b-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 16000000000
+min_ram_gb = 24.0
+context_length = 262144
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- Llama 3.1 8B (already have Llama 3 8B, now 3.1) ---
+
+[[model]]
+id = "llama3.1_8b"
+name = "Llama 3.1 8B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+filename = "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3.1_8b-q2_k"
+name = "Llama 3.1 8B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q2_K.gguf"
+filename = "Meta-Llama-3.1-8B-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 2800000000
+min_ram_gb = 6.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "llama3.1_8b-q3_k_m"
+name = "Llama 3.1 8B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q3_K_M.gguf"
+filename = "Meta-Llama-3.1-8B-Instruct-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 3500000000
+min_ram_gb = 8.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "llama3.1_8b-q5_k_m"
+name = "Llama 3.1 8B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+filename = "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 5800000000
+min_ram_gb = 14.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "llama3.1_8b-q6_k"
+name = "Llama 3.1 8B Instruct (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q6_K.gguf"
+filename = "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf"
+sha256 = ""
+size_bytes = 6800000000
+min_ram_gb = 16.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+# --- Llama 3 8B (existing + new quants) ---
+
+[[model]]
+id = "llama3_8b"
+name = "Llama 3 8B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3_8b-q2_k"
+name = "Llama 3 8B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q2_K.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 2800000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "llama3_8b-q3_k_m"
+name = "Llama 3 8B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q3_K_M.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 3500000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "llama3_8b-q5_k_m"
+name = "Llama 3 8B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q5_K_M.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 5800000000
+min_ram_gb = 14.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "llama3_8b-q6_k"
+name = "Llama 3 8B Instruct (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q6_K.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q6_K.gguf"
+sha256 = ""
+size_bytes = 6800000000
+min_ram_gb = 16.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+[[model]]
+id = "llama3_8b-q8_0"
+name = "Llama 3 8B Instruct (Q8_0)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct-Q8_0.gguf"
+filename = "Meta-Llama-3-8B-Instruct-Q8_0.gguf"
+sha256 = ""
+size_bytes = 9000000000
+min_ram_gb = 20.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q8_0"
+
+# --- Gemma 3 12B (existing + quants) ---
+
+[[model]]
+id = "gemma3_12b"
+name = "Gemma 3 12B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf"
+filename = "gemma-3-12b-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 7300000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma3_12b-q2_k"
+name = "Gemma 3 12B IT (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q2_K.gguf"
+filename = "gemma-3-12b-it-Q2_K.gguf"
+sha256 = ""
+size_bytes = 4100000000
+min_ram_gb = 10.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "gemma3_12b-q3_k_m"
+name = "Gemma 3 12B IT (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q3_K_M.gguf"
+filename = "gemma-3-12b-it-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 5200000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "gemma3_12b-q5_k_m"
+name = "Gemma 3 12B IT (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q5_K_M.gguf"
+filename = "gemma-3-12b-it-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 8800000000
+min_ram_gb = 18.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "gemma3_12b-q6_k"
+name = "Gemma 3 12B IT (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q6_K.gguf"
+filename = "gemma-3-12b-it-Q6_K.gguf"
+sha256 = ""
+size_bytes = 10000000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+# --- Mistral 7B (existing) ---
+
+[[model]]
+id = "mistral_7b"
+name = "Mistral 7B Instruct v0.3"
+provider = "llamacpp"
+download_url = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/mistral-7b-instruct-v0.3.Q4_K_M.gguf"
+filename = "mistral-7b-instruct-v0.3.Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4300000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- MathΣtral 7B ---
+
+[[model]]
+id = "mathstral_7b"
+name = "MathΣtral 7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mathstral-7B-v0.1-GGUF/resolve/main/Mathstral-7B-v0.1-Q4_K_M.gguf"
+filename = "Mathstral-7B-v0.1-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4300000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+# --- Exaone 3.5 8B ---
+
+[[model]]
+id = "exaone3.5_8b"
+name = "EXAONE 3.5 8B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/EXAONE-3.5-8B-Instruct-GGUF/resolve/main/EXAONE-3.5-8B-Instruct-Q4_K_M.gguf"
+filename = "EXAONE-3.5-8B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- Granite 8B ---
+
+[[model]]
+id = "granite_8b"
+name = "Granite 3.0 8B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/granite-3.0-8b-instruct-GGUF/resolve/main/granite-3.0-8b-instruct-Q4_K_M.gguf"
+filename = "granite-3.0-8b-instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 5300000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- Command R 7B ---
+
+[[model]]
+id = "command_r7b"
+name = "Command R 7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/c4ai-command-r7b-12-2024-GGUF/resolve/main/c4ai-command-r7b-12-2024-Q4_K_M.gguf"
+filename = "c4ai-command-r7b-12-2024-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 5430000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- LFM 2.5 Thinking 1.2B ---
+
+[[model]]
+id = "lfm2.5_thinking_1.2b"
+name = "LFM 2.5 Thinking 1.2B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-GGUF/resolve/main/LFM2.5-1.2B-Thinking-Q4_K_M.gguf"
+filename = "LFM2.5-1.2B-Thinking-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 730000000
+min_ram_gb = 2.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "lfm2.5_thinking_1.2b-q2_k"
+name = "LFM 2.5 Thinking 1.2B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-GGUF/resolve/main/LFM2.5-1.2B-Thinking-Q2_K.gguf"
+filename = "LFM2.5-1.2B-Thinking-Q2_K.gguf"
+sha256 = ""
+size_bytes = 410000000
+min_ram_gb = 1.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "lfm2.5_thinking_1.2b-q5_k_m"
+name = "LFM 2.5 Thinking 1.2B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Thinking-GGUF/resolve/main/LFM2.5-1.2B-Thinking-Q5_K_M.gguf"
+filename = "LFM2.5-1.2B-Thinking-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 890000000
+min_ram_gb = 2.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+# == Medium Reasoning models ==
+
+# --- Qwen3 8B (existing + quants) ---
+
+[[model]]
+id = "qwen3_8b"
+name = "Qwen3 8B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf"
+filename = "Qwen3-8B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 5370000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_8b-q2_k"
+name = "Qwen3 8B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q2_K.gguf"
+filename = "Qwen3-8B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 3100000000
+min_ram_gb = 8.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen3_8b-q3_k_m"
+name = "Qwen3 8B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q3_K_M.gguf"
+filename = "Qwen3-8B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 3800000000
+min_ram_gb = 10.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen3_8b-q5_k_m"
+name = "Qwen3 8B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q5_K_M.gguf"
+filename = "Qwen3-8B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 6400000000
+min_ram_gb = 14.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen3_8b-q6_k"
+name = "Qwen3 8B (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q6_K.gguf"
+filename = "Qwen3-8B-Q6_K.gguf"
+sha256 = ""
+size_bytes = 7500000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q6_K"
+
+# --- Mistral Nemo 12B ---
+
+[[model]]
+id = "mistral_nemo_12b"
+name = "Mistral Nemo 12B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"
+filename = "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 7500000000
+min_ram_gb = 16.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "mistral_nemo_12b-q2_k"
+name = "Mistral Nemo 12B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q2_K.gguf"
+filename = "Mistral-Nemo-Instruct-2407-Q2_K.gguf"
+sha256 = ""
+size_bytes = 4200000000
+min_ram_gb = 10.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "mistral_nemo_12b-q3_k_m"
+name = "Mistral Nemo 12B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q3_K_M.gguf"
+filename = "Mistral-Nemo-Instruct-2407-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 5300000000
+min_ram_gb = 12.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "mistral_nemo_12b-q5_k_m"
+name = "Mistral Nemo 12B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q5_K_M.gguf"
+filename = "Mistral-Nemo-Instruct-2407-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 9000000000
+min_ram_gb = 18.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- Qwen 2.5 Coder 14B ---
+
+[[model]]
+id = "qwen25_coder_14b"
+name = "Qwen 2.5 Coder 14B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF/resolve/main/qwen2.5-coder-14b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-coder-14b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 9200000000
+min_ram_gb = 20.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_coder_14b-q2_k"
+name = "Qwen 2.5 Coder 14B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF/resolve/main/qwen2.5-coder-14b-instruct-q2_k.gguf"
+filename = "qwen2.5-coder-14b-instruct-q2_k.gguf"
+sha256 = ""
+size_bytes = 5200000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_coder_14b-q3_k_m"
+name = "Qwen 2.5 Coder 14B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF/resolve/main/qwen2.5-coder-14b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-coder-14b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 6500000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_coder_14b-q5_k_m"
+name = "Qwen 2.5 Coder 14B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF/resolve/main/qwen2.5-coder-14b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-coder-14b-instruct-q5_k_m.gguf"
+sha256 = ""
+size_bytes = 11000000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- Solar 10.7B ---
+
+[[model]]
+id = "solar_10.7b"
+name = "Solar 10.7B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Solar-10.7B-Instruct-v1.0-GGUF/resolve/main/Solar-10.7B-Instruct-v1.0-Q4_K_M.gguf"
+filename = "Solar-10.7B-Instruct-v1.0-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 6400000000
+min_ram_gb = 14.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+# --- Qwen 2.5 14B (existing + quants) ---
+
+[[model]]
+id = "qwen25_14b"
+name = "Qwen 2.5 14B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-14b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 9200000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_14b-q2_k"
+name = "Qwen 2.5 14B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q2_k.gguf"
+filename = "qwen2.5-14b-instruct-q2_k.gguf"
+sha256 = ""
+size_bytes = 5200000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_14b-q3_k_m"
+name = "Qwen 2.5 14B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-14b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 6500000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_14b-q5_k_m"
+name = "Qwen 2.5 14B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-14b-instruct-q5_k_m.gguf"
+sha256 = ""
+size_bytes = 11000000000
+min_ram_gb = 24.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "qwen25_14b-q6_k"
+name = "Qwen 2.5 14B Instruct (Q6_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q6_k.gguf"
+filename = "qwen2.5-14b-instruct-q6_k.gguf"
+sha256 = ""
+size_bytes = 13000000000
+min_ram_gb = 28.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q6_K"
+
+# --- Qwen3 14B (existing + quants) ---
+
+[[model]]
+id = "qwen3_14b"
+name = "Qwen3 14B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q4_K_M.gguf"
+filename = "Qwen3-14B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 9660000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_14b-q2_k"
+name = "Qwen3 14B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q2_K.gguf"
+filename = "Qwen3-14B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 5500000000
+min_ram_gb = 12.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen3_14b-q3_k_m"
+name = "Qwen3 14B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q3_K_M.gguf"
+filename = "Qwen3-14B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 6800000000
+min_ram_gb = 14.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen3_14b-q5_k_m"
+name = "Qwen3 14B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-14B-GGUF/resolve/main/Qwen3-14B-Q5_K_M.gguf"
+filename = "Qwen3-14B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 11500000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+# =============================================================================
+# Large Models (14B–32B+)
+# =============================================================================
+
+# --- Gemma 3 27B (existing) ---
+
+[[model]]
+id = "gemma3_27b"
+name = "Gemma 3 27B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-27b-it-GGUF/resolve/main/gemma-3-27b-it-Q4_K_M.gguf"
+filename = "gemma-3-27b-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 17180000000
+min_ram_gb = 24.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma3_27b-q2_k"
+name = "Gemma 3 27B IT (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-27b-it-GGUF/resolve/main/gemma-3-27b-it-Q2_K.gguf"
+filename = "gemma-3-27b-it-Q2_K.gguf"
+sha256 = ""
+size_bytes = 9600000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "gemma3_27b-q3_k_m"
+name = "Gemma 3 27B IT (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-27b-it-GGUF/resolve/main/gemma-3-27b-it-Q3_K_M.gguf"
+filename = "gemma-3-27b-it-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 12100000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "gemma3_27b-q5_k_m"
+name = "Gemma 3 27B IT (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/gemma-3-27b-it-GGUF/resolve/main/gemma-3-27b-it-Q5_K_M.gguf"
+filename = "gemma-3-27b-it-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 20600000000
+min_ram_gb = 32.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- Gemma 4 31B ---
+
+[[model]]
+id = "gemma4_31b"
+name = "Gemma 4 31B IT"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/main/google_gemma-4-31B-it-Q4_K_M.gguf"
+filename = "google_gemma-4-31B-it-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 20500000000
+min_ram_gb = 24.0
+context_length = 262144
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "gemma4_31b-q2_k"
+name = "Gemma 4 31B IT (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/main/google_gemma-4-31B-it-Q2_K.gguf"
+filename = "google_gemma-4-31B-it-Q2_K.gguf"
+sha256 = ""
+size_bytes = 11500000000
+min_ram_gb = 16.0
+context_length = 262144
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "gemma4_31b-q3_k_m"
+name = "Gemma 4 31B IT (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/main/google_gemma-4-31B-it-Q3_K_M.gguf"
+filename = "google_gemma-4-31B-it-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 14400000000
+min_ram_gb = 20.0
+context_length = 262144
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "gemma4_31b-q5_k_m"
+name = "Gemma 4 31B IT (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/google_gemma-4-31B-it-GGUF/resolve/main/google_gemma-4-31B-it-Q5_K_M.gguf"
+filename = "google_gemma-4-31B-it-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 24500000000
+min_ram_gb = 32.0
+context_length = 262144
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- Qwen 2.5 32B (existing + quants) ---
+
+[[model]]
+id = "qwen25_32b"
+name = "Qwen 2.5 32B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q4_k_m.gguf"
+filename = "qwen2.5-32b-instruct-q4_k_m.gguf"
+sha256 = ""
+size_bytes = 20000000000
+min_ram_gb = 32.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen25_32b-q2_k"
+name = "Qwen 2.5 32B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q2_k.gguf"
+filename = "qwen2.5-32b-instruct-q2_k.gguf"
+sha256 = ""
+size_bytes = 11300000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen25_32b-q3_k_m"
+name = "Qwen 2.5 32B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q3_k_m.gguf"
+filename = "qwen2.5-32b-instruct-q3_k_m.gguf"
+sha256 = ""
+size_bytes = 14100000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen25_32b-q5_k_m"
+name = "Qwen 2.5 32B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen2.5-32B-Instruct-GGUF/resolve/main/qwen2.5-32b-instruct-q5_k_m.gguf"
+filename = "qwen2.5-32b-instruct-q5_k_m.gguf"
+sha256 = ""
+size_bytes = 24000000000
+min_ram_gb = 40.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- Qwen3 32B (existing + quants) ---
+
+[[model]]
+id = "qwen3_32b"
+name = "Qwen3 32B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q4_K_M.gguf"
+filename = "Qwen3-32B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 21200000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwen3_32b-q2_k"
+name = "Qwen3 32B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q2_K.gguf"
+filename = "Qwen3-32B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 12000000000
+min_ram_gb = 20.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwen3_32b-q3_k_m"
+name = "Qwen3 32B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q3_K_M.gguf"
+filename = "Qwen3-32B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 15000000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "qwen3_32b-q5_k_m"
+name = "Qwen3 32B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/Qwen/Qwen3-32B-GGUF/resolve/main/Qwen3-32B-Q5_K_M.gguf"
+filename = "Qwen3-32B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 25400000000
+min_ram_gb = 40.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+# =============================================================================
+# Very Large Models (70B+)
+# =============================================================================
+
+# --- Llama 3.3 70B ---
+
+[[model]]
+id = "llama3.3_70b"
+name = "Llama 3.3 70B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3.3-70B-Instruct-Q4_K_M.gguf"
+filename = "Meta-Llama-3.3-70B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 40000000000
+min_ram_gb = 48.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3.3_70b-q2_k"
+name = "Llama 3.3 70B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3.3-70B-Instruct-Q2_K.gguf"
+filename = "Meta-Llama-3.3-70B-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 22800000000
+min_ram_gb = 32.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "llama3.3_70b-q3_k_m"
+name = "Llama 3.3 70B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3.3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3.3-70B-Instruct-Q3_K_M.gguf"
+filename = "Meta-Llama-3.3-70B-Instruct-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 28600000000
+min_ram_gb = 40.0
+context_length = 131072
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+# --- Llama 3 70B (existing) ---
+
+[[model]]
+id = "llama3_70b"
+name = "Llama 3 70B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
+filename = "Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 39000000000
+min_ram_gb = 48.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "llama3_70b-q2_k"
+name = "Llama 3 70B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3-70B-Instruct-Q2_K.gguf"
+filename = "Meta-Llama-3-70B-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 22000000000
+min_ram_gb = 32.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "llama3_70b-q3_k_m"
+name = "Llama 3 70B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Meta-Llama-3-70B-Instruct-GGUF/resolve/main/Meta-Llama-3-70B-Instruct-Q3_K_M.gguf"
+filename = "Meta-Llama-3-70B-Instruct-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 27800000000
+min_ram_gb = 40.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+# =============================================================================
+# MoE Models
+# =============================================================================
+
+# --- Mixtral 8x7B ---
+
+[[model]]
+id = "mixtral_8x7b"
+name = "Mixtral 8x7B Instruct v0.1"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF/resolve/main/Mixtral-8x7B-Instruct-v0.1-Q4_K_M.gguf"
+filename = "Mixtral-8x7B-Instruct-v0.1-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 26800000000
+min_ram_gb = 32.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "mixtral_8x7b-q2_k"
+name = "Mixtral 8x7B Instruct (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF/resolve/main/Mixtral-8x7B-Instruct-v0.1-Q2_K.gguf"
+filename = "Mixtral-8x7B-Instruct-v0.1-Q2_K.gguf"
+sha256 = ""
+size_bytes = 15000000000
+min_ram_gb = 20.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "mixtral_8x7b-q3_k_m"
+name = "Mixtral 8x7B Instruct (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF/resolve/main/Mixtral-8x7B-Instruct-v0.1-Q3_K_M.gguf"
+filename = "Mixtral-8x7B-Instruct-v0.1-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 19000000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "mixtral_8x7b-q5_k_m"
+name = "Mixtral 8x7B Instruct (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF/resolve/main/Mixtral-8x7B-Instruct-v0.1-Q5_K_M.gguf"
+filename = "Mixtral-8x7B-Instruct-v0.1-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 32000000000
+min_ram_gb = 48.0
+context_length = 32768
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q5_K_M"
+
+# --- DeepSeek Coder V2 Lite (16B MoE, ~2.4B active) ---
+
+[[model]]
+id = "deepseek_coder_v2_lite_16b"
+name = "DeepSeek Coder V2 Lite 16B MoE"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
+filename = "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 10000000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_coder_v2_lite_16b-q2_k"
+name = "DeepSeek Coder V2 Lite 16B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf"
+filename = "DeepSeek-Coder-V2-Lite-Instruct-Q2_K.gguf"
+sha256 = ""
+size_bytes = 5700000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "deepseek_coder_v2_lite_16b-q3_k_m"
+name = "DeepSeek Coder V2 Lite 16B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Lite-Instruct-Q3_K_M.gguf"
+filename = "DeepSeek-Coder-V2-Lite-Instruct-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 7200000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = true
+native_tools = true
+reasoning = false
+instruct = true
+quantization = "Q3_K_M"
+
+# =============================================================================
+# Reasoning Models (DeepSeek R1, QwQ, Falcon3)
+# =============================================================================
+
+# --- DeepSeek R1 Distills (existing + new quants) ---
+
+[[model]]
+id = "deepseek_r1_1.5b"
+name = "DeepSeek R1 Distill Qwen 1.5B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 1200000000
+min_ram_gb = 4.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "deepseek_r1_7b"
+name = "DeepSeek R1 Distill Qwen 7B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4600000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_7b-q2_k"
+name = "DeepSeek R1 Distill Qwen 7B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q2_K.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-7B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 2600000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "deepseek_r1_7b-q3_k_m"
+name = "DeepSeek R1 Distill Qwen 7B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q3_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-7B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 3300000000
+min_ram_gb = 8.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "deepseek_r1_7b-q5_k_m"
+name = "DeepSeek R1 Distill Qwen 7B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q5_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-7B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 5500000000
+min_ram_gb = 14.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+[[model]]
+id = "deepseek_r1_14b"
+name = "DeepSeek R1 Distill Qwen 14B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 8800000000
+min_ram_gb = 20.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_14b-q2_k"
+name = "DeepSeek R1 Distill Qwen 14B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q2_K.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-14B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 5000000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "deepseek_r1_14b-q3_k_m"
+name = "DeepSeek R1 Distill Qwen 14B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q3_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-14B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 6200000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "deepseek_r1_32b"
+name = "DeepSeek R1 Distill Qwen 32B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 21300000000
+min_ram_gb = 24.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_32b-q2_k"
+name = "DeepSeek R1 Distill Qwen 32B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-32B-Q2_K.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-32B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 12100000000
+min_ram_gb = 16.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "deepseek_r1_32b-q3_k_m"
+name = "DeepSeek R1 Distill Qwen 32B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-32B-Q3_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Qwen-32B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 15200000000
+min_ram_gb = 24.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "deepseek_r1_8b"
+name = "DeepSeek R1 Distill Llama 8B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 5150000000
+min_ram_gb = 12.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_8b-q2_k"
+name = "DeepSeek R1 Distill Llama 8B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q2_K.gguf"
+filename = "DeepSeek-R1-Distill-Llama-8B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 2900000000
+min_ram_gb = 8.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "deepseek_r1_8b-q3_k_m"
+name = "DeepSeek R1 Distill Llama 8B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q3_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Llama-8B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 3700000000
+min_ram_gb = 10.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+[[model]]
+id = "deepseek_r1_8b-q5_k_m"
+name = "DeepSeek R1 Distill Llama 8B (Q5_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q5_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Llama-8B-Q5_K_M.gguf"
+sha256 = ""
+size_bytes = 6200000000
+min_ram_gb = 14.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q5_K_M"
+
+# --- DeepSeek R1 70B ---
+
+[[model]]
+id = "deepseek_r1_70b"
+name = "DeepSeek R1 Distill Llama 70B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-70B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-70B-Q4_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Llama-70B-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 41000000000
+min_ram_gb = 48.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "deepseek_r1_70b-q2_k"
+name = "DeepSeek R1 Distill Llama 70B (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-70B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-70B-Q2_K.gguf"
+filename = "DeepSeek-R1-Distill-Llama-70B-Q2_K.gguf"
+sha256 = ""
+size_bytes = 23500000000
+min_ram_gb = 32.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "deepseek_r1_70b-q3_k_m"
+name = "DeepSeek R1 Distill Llama 70B (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-70B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-70B-Q3_K_M.gguf"
+filename = "DeepSeek-R1-Distill-Llama-70B-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 29500000000
+min_ram_gb = 40.0
+context_length = 16384
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+# --- QwQ 32B ---
+
+[[model]]
+id = "qwq_32b"
+name = "QwQ 32B Preview"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/QwQ-32B-Preview-GGUF/resolve/main/QwQ-32B-Preview-Q4_K_M.gguf"
+filename = "QwQ-32B-Preview-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 21300000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "qwq_32b-q2_k"
+name = "QwQ 32B Preview (Q2_K)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/QwQ-32B-Preview-GGUF/resolve/main/QwQ-32B-Preview-Q2_K.gguf"
+filename = "QwQ-32B-Preview-Q2_K.gguf"
+sha256 = ""
+size_bytes = 12100000000
+min_ram_gb = 16.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q2_K"
+
+[[model]]
+id = "qwq_32b-q3_k_m"
+name = "QwQ 32B Preview (Q3_K_M)"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/QwQ-32B-Preview-GGUF/resolve/main/QwQ-32B-Preview-Q3_K_M.gguf"
+filename = "QwQ-32B-Preview-Q3_K_M.gguf"
+sha256 = ""
+size_bytes = 15200000000
+min_ram_gb = 24.0
+context_length = 32768
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q3_K_M"
+
+# --- Falcon3 reasoning models (existing) ---
+
+[[model]]
+id = "falcon3_3b"
+name = "Falcon3 3B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Falcon3-3B-Instruct-GGUF/resolve/main/Falcon3-3B-Instruct-Q4_K_M.gguf"
+filename = "Falcon3-3B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 2150000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "falcon3_7b"
+name = "Falcon3 7B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Falcon3-7B-Instruct-GGUF/resolve/main/Falcon3-7B-Instruct-Q4_K_M.gguf"
+filename = "Falcon3-7B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 4900000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+[[model]]
+id = "falcon3_10b"
+name = "Falcon3 10B Instruct"
+provider = "llamacpp"
+download_url = "https://huggingface.co/bartowski/Falcon3-10B-Instruct-GGUF/resolve/main/Falcon3-10B-Instruct-Q4_K_M.gguf"
+filename = "Falcon3-10B-Instruct-Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 6750000000
+min_ram_gb = 12.0
+context_length = 8192
+supports_tools = false
+native_tools = false
+reasoning = true
+instruct = true
+quantization = "Q4_K_M"
+
+# --- MiniCPM3 4B (tool-capable reasoning) ---
+
+[[model]]
+id = "minicpm3_4b"
+name = "MiniCPM3 4B"
+provider = "llamacpp"
+download_url = "https://huggingface.co/QuantFactory/MiniCPM3-4B-GGUF/resolve/main/MiniCPM3-4B.Q4_K_M.gguf"
+filename = "MiniCPM3-4B.Q4_K_M.gguf"
+sha256 = ""
+size_bytes = 2680000000
+min_ram_gb = 6.0
+context_length = 8192
+supports_tools = true
+native_tools = true
+reasoning = true
 instruct = true
 quantization = "Q4_K_M"

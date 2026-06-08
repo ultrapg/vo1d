@@ -25,6 +25,7 @@ pub struct BuiltinBackend {
     config: BuiltinConfig,
     model_path: std::path::PathBuf,
     model: Arc<Mutex<Option<LlamaModelHandle>>>,
+    native_tools: bool,
 }
 
 struct LlamaModelHandle {
@@ -42,11 +43,12 @@ struct GeneratedOutput {
 }
 
 impl BuiltinBackend {
-    pub fn new(config: BuiltinConfig, model_path: std::path::PathBuf) -> Self {
+    pub fn new(config: BuiltinConfig, model_path: std::path::PathBuf, native_tools: bool) -> Self {
         Self {
             config,
             model_path,
             model: Arc::new(Mutex::new(None)),
+            native_tools,
         }
     }
 
@@ -278,7 +280,7 @@ impl LlmBackend for BuiltinBackend {
     }
 
     fn supports_tools(&self) -> bool {
-        false
+        self.native_tools
     }
 
     fn context_length(&self) -> usize {
@@ -288,18 +290,28 @@ impl LlmBackend for BuiltinBackend {
     async fn chat(
         &self,
         messages: &[Message],
-        _tools: Option<&[Tool]>,
+        tools: Option<&[Tool]>,
     ) -> Result<LlmResponse, Box<dyn std::error::Error + Send + Sync>> {
-        let prompt = build_chat_prompt(messages, self.config.context_size as usize);
+        let prompt = if self.native_tools && tools.is_some_and(|t| !t.is_empty()) {
+            build_chat_prompt_with_tools(messages, tools.unwrap(), self.config.context_size as usize)
+        } else {
+            build_chat_prompt(messages, self.config.context_size as usize)
+        };
 
         let (output, usage) = self
             .generate(&prompt)
             .await
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
 
+        let tool_calls = if self.native_tools && tools.is_some_and(|t| !t.is_empty()) {
+            parse_tool_calls(&output)
+        } else {
+            None
+        };
+
         Ok(LlmResponse {
-            content: output,
-            tool_calls: None,
+            content: if tool_calls.is_some() { String::new() } else { output },
+            tool_calls,
             usage: Some(usage),
         })
     }
@@ -355,11 +367,67 @@ fn build_chat_prompt(messages: &[Message], max_context: usize) -> String {
     }
 }
 
+fn build_chat_prompt_with_tools(messages: &[Message], tools: &[Tool], max_context: usize) -> String {
+    let mut parts = Vec::new();
+
+    for msg in messages {
+        let role = match msg.role.as_str() {
+            "system" => "system",
+            "user" => "user",
+            "assistant" => "assistant",
+            "tool" => "tool",
+            _ => "user",
+        };
+        if role == "system" {
+            let mut tool_block = String::from("\n\n# Available Tools\n");
+            for tool in tools {
+                tool_block.push_str(&format!(
+                    "\n## {}\n{}\n",
+                    tool.name, tool.description
+                ));
+                if !tool.parameters.is_null() {
+                    tool_block.push_str(&format!("```json\n{}\n```\n", tool.parameters));
+                }
+            }
+            tool_block.push_str("\nTo use a tool, respond with a JSON object: {\"name\": \"tool_name\", \"arguments\": {...}}");
+            parts.push(format!("<|im_start|>system\n{}<|im_end|>", format!("{}{}", msg.content, tool_block)));
+        } else {
+            parts.push(format!("<|im_start|>{}\n{}<|im_end|>", role, msg.content));
+        }
+    }
+
+    parts.push("<|im_start|>assistant\n".to_string());
+
+    let full = parts.join("\n");
+
+    if full.len() > max_context * 4 {
+        let start = full.len() - max_context * 4;
+        format!("...{}", &full[start..])
+    } else {
+        full
+    }
+}
+
+fn parse_tool_calls(output: &str) -> Option<Vec<crate::models::message::ToolCall>> {
+    let trimmed = output.trim();
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        let name = val.get("name").and_then(|v| v.as_str())?;
+        let args = val.get("arguments").or_else(|| val.get("arguments"))?;
+        Some(vec![crate::models::message::ToolCall::new(
+            name,
+            args.to_string(),
+        )])
+    } else {
+        None
+    }
+}
+
 pub async fn create_backend(
     config: &BuiltinConfig,
     model_path: &Path,
+    native_tools: bool,
 ) -> Result<Box<dyn LlmBackend + Send + Sync>> {
-    let backend = BuiltinBackend::new(config.clone(), model_path.to_path_buf());
+    let backend = BuiltinBackend::new(config.clone(), model_path.to_path_buf(), native_tools);
 
     if let Err(e) = backend.load().await {
         tracing::warn!(

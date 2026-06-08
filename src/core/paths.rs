@@ -112,6 +112,10 @@ impl Vo1dPaths {
         self.root.join("memory")
     }
 
+    pub fn skills_dir(&self) -> PathBuf {
+        self.root.join("skills")
+    }
+
     pub fn curriculum_dir(&self) -> PathBuf {
         self.root.join("curriculum")
     }
@@ -154,6 +158,7 @@ impl Vo1dPaths {
             self.plugins_dir(),
             self.memory_dir(),
             self.curriculum_dir(),
+            self.skills_dir(),
         ];
 
         for dir in &dirs {

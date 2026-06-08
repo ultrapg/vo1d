@@ -245,6 +245,10 @@ fn test_action_descriptions_all_non_empty() {
         Action::WebFetch { url: "https://example.com".into(), max_chars: None },
         Action::ShowChanges { path: None },
         Action::RestoreBackup { path: "a".into() },
+        Action::CreateSkill { name: "s".into(), description: "d".into(), params_schema: None, steps: vec![] },
+        Action::InvokeSkill { name: "s".into(), params: None },
+        Action::ListSkills { keyword: None },
+        Action::DeleteSkill { name: "s".into() },
     ];
 
     for action in &actions {
@@ -286,6 +290,10 @@ fn test_action_type_names_match_registry() {
         (Action::WebFetch { url: "".into(), max_chars: None }, "web_fetch"),
         (Action::ShowChanges { path: None }, "show_changes"),
         (Action::RestoreBackup { path: "".into() }, "restore_backup"),
+        (Action::CreateSkill { name: "".into(), description: "".into(), params_schema: None, steps: vec![] }, "create_skill"),
+        (Action::InvokeSkill { name: "".into(), params: None }, "invoke_skill"),
+        (Action::ListSkills { keyword: None }, "list_skills"),
+        (Action::DeleteSkill { name: "".into() }, "delete_skill"),
     ];
 
     for (action, expected_name) in &pairs {

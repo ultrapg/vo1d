@@ -285,6 +285,67 @@ impl ToolRegistry {
             }),
         });
 
+        tools.insert("create_skill".to_string(), ToolInfo {
+            name: "create_skill",
+            description: "Save a new reusable skill (multi-step procedure) for later invocation.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Unique kebab-case name, e.g. 'setup-rust-project'" },
+                    "description": { "type": "string", "description": "Human-readable description of what this skill does" },
+                    "params_schema": { "type": "object", "description": "Optional JSON schema for invocation parameters" },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "tool": { "type": "string", "description": "Tool name, e.g. execute_command, read_file" },
+                                "args": { "type": "object", "description": "Arguments to pass to the tool" }
+                            },
+                            "required": ["tool", "args"]
+                        }
+                    }
+                },
+                "required": ["name", "description", "steps"]
+            }),
+        });
+
+        tools.insert("invoke_skill".to_string(), ToolInfo {
+            name: "invoke_skill",
+            description: "Run a saved skill by name. Steps execute sequentially. Optionally pass parameters validated against the skill's schema.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Name of the skill to invoke" },
+                    "params": { "type": "object", "description": "Optional parameters to pass to skill steps" }
+                },
+                "required": ["name"]
+            }),
+        });
+
+        tools.insert("list_skills".to_string(), ToolInfo {
+            name: "list_skills",
+            description: "List available skills. Optionally filter by keyword (case-insensitive match on name and description).",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "keyword": { "type": "string", "description": "Optional keyword to filter skills by name or description" }
+                }
+            }),
+        });
+
+        tools.insert("delete_skill".to_string(), ToolInfo {
+            name: "delete_skill",
+            description: "Remove a saved skill by name.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": { "type": "string", "description": "Name of the skill to delete" }
+                },
+                "required": ["name"]
+            }),
+        });
+
         Self { tools }
     }
 

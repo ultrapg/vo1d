@@ -10,6 +10,7 @@ use crate::models::action::Action;
 use crate::models::message::Message;
 use crate::models::plan::{Plan, PlanStep, StepStatus};
 use crate::security::policy::PolicyResult;
+use crate::models::message::Tool;
 use crate::tools::registry::ToolRegistry;
 use anyhow::{Context, Result};
 use futures_util::StreamExt;
@@ -52,7 +53,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
     let model_path = ctx.model_registry.model_path(backend);
     let llm_config = ctx.config.llm.builtin.clone();
-    let llm = crate::llm::builtin::create_backend(&llm_config, &model_path).await
+    let native_tools = backend.native_tools;
+    let llm = crate::llm::builtin::create_backend(&llm_config, &model_path, native_tools).await
         .context("Failed to create LLM backend")?;
 
     let supports_native_tools = llm.supports_tools();
@@ -180,7 +182,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         let conv_chars: usize = conversation.iter().map(|m| m.content.len() + 100).sum();
         let usage_ratio = if context_limit > 0 { conv_chars as f64 / context_limit as f64 } else { 0.0 };
 
-        if usage_ratio > 0.90 && conversation.len() > 10 {
+        if usage_ratio > 0.60 && conversation.len() > 10 {
             // --- LLM summarization at high usage ---
             let summarization_range = compressor.summarization_range(&conversation);
             if let Some((start, end, insert_at)) = summarization_range {
@@ -256,8 +258,21 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         let mut response_text = String::new();
+        let mut tool_calls_result: Option<Vec<crate::models::message::ToolCall>> = None;
         let mut display_printed: usize = 0;
-        {
+
+        if supports_native_tools {
+            let tools: Vec<Tool> = tool_registry.as_llm_tools();
+            let result = llm.chat(&conversation, Some(&tools)).await
+                .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
+            response_text = result.content;
+            tool_calls_result = result.tool_calls;
+            if !session.tui_mode {
+                let clean = format_for_display(&response_text);
+                print!("{}", clean);
+                std::io::Write::flush(&mut std::io::stdout())?;
+            }
+        } else {
             let mut stream = llm.stream_chat(&conversation).await
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
 
@@ -266,14 +281,15 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     Ok(token) => {
                         response_text.push_str(&token);
 
-                        // Strip think tags for display, print delta in real time
                         if !session.tui_mode {
-                            let clean = strip_think_tags(&response_text);
-                            if clean.len() > display_printed {
-                                let new_part = &clean[display_printed..];
+                            let clean = format_for_display(&response_text);
+                            let clean_chars: Vec<char> = clean.chars().collect();
+                            let total_chars = clean_chars.len();
+                            if total_chars > display_printed {
+                                let new_part: String = clean_chars[display_printed..].iter().collect();
                                 print!("{}", new_part);
                                 std::io::Write::flush(&mut std::io::stdout())?;
-                                display_printed = clean.len();
+                                display_printed = total_chars;
                             }
                         }
                     }
@@ -289,13 +305,23 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         //  we strip again so parsing also sees clean text)
         response_text = strip_think_tags(&response_text);
 
-        // Parse action from response
-        let action = match tool_parser.parse(&response_text, supports_native_tools) {
-            Ok(a) => a,
-            Err(_e) => {
-                tracing::warn!("No structured action found; treating as Finish output: {}",
-                    response_text.chars().take(100).collect::<String>());
-                Action::Finish { output: Some(response_text.clone()) }
+        // Parse action from response (either from tool_calls or text)
+        let action = if let Some(tcalls) = tool_calls_result {
+            if !tcalls.is_empty() {
+                tool_call_to_action(&tcalls[0], &response_text)
+            } else {
+                tool_parser.parse(&response_text, supports_native_tools).unwrap_or_else(|_| {
+                    Action::Finish { output: Some(response_text.clone()) }
+                })
+            }
+        } else {
+            match tool_parser.parse(&response_text, supports_native_tools) {
+                Ok(a) => a,
+                Err(_e) => {
+                    tracing::warn!("No structured action found; treating as Finish output: {}",
+                        response_text.chars().take(100).collect::<String>());
+                    Action::Finish { output: Some(response_text.clone()) }
+                }
             }
         };
 
@@ -515,10 +541,18 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             Ok(output) => {
                 if !session.tui_mode {
                     eprintln!("  ✓ Success");
+                    // Show tool result in the streaming output
+                    let display_out = if output.len() > 2000 {
+                        format!("{}... [truncated {} chars]", &output[..2000], output.len() - 2000)
+                    } else {
+                        output.clone()
+                    };
+                    eprintln!("─── Result ───");
+                    eprintln!("{}", display_out);
                 }
                 tracing::info!("Action succeeded: {}", action.description());
 
-                // Truncate large outputs
+                // Truncate large outputs for conversation
                 let truncated = if output.len() > 2000 {
                     format!("{}... [truncated {} chars]", &output[..2000], output.len() - 2000)
                 } else {
@@ -786,9 +820,70 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     Ok(session)
 }
 
+fn format_for_display(text: &str) -> String {
+    text
+        .replace("<think>", "─── Reasoning ───\n")
+        .replace("</think>", "\n───────────────\n")
+        .replace("```json\n", "─── Tool Call ───\n")
+}
+
 fn strip_think_tags(text: &str) -> String {
     let re = Regex::new(r"(?s)<think>.*?</think>").unwrap();
     re.replace_all(text, "").to_string()
+}
+
+fn tool_call_to_action(tc: &crate::models::message::ToolCall, fallback_text: &str) -> Action {
+    match tc.function.name.as_str() {
+        "read_file" => Action::ReadFile { path: tc.function.arguments.clone(), start_line: None, end_line: None },
+        "write_file" => {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
+                Action::WriteFile {
+                    path: val.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    content: val.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    append: None,
+                }
+            } else {
+                Action::Finish { output: Some(fallback_text.to_string()) }
+            }
+        }
+        "execute_command" => {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
+                Action::ExecuteCommand {
+                    command: val.get("command").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    timeout: val.get("timeout").and_then(|v| v.as_u64()),
+                    workdir: val.get("workdir").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                }
+            } else {
+                Action::Finish { output: Some(fallback_text.to_string()) }
+            }
+        }
+        "search_files" => {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
+                Action::SearchFiles {
+                    pattern: val.get("pattern").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    path: val.get("path").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                    search_type: val.get("type").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                }
+            } else {
+                Action::SearchFiles { pattern: tc.function.arguments.clone(), path: None, search_type: None }
+            }
+        }
+        "list_directory" => {
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&tc.function.arguments) {
+                Action::ListDirectory {
+                    path: val.get("path").and_then(|v| v.as_str()).unwrap_or(".").to_string(),
+                    pattern: val.get("pattern").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                }
+            } else {
+                Action::ListDirectory { path: tc.function.arguments.clone(), pattern: None }
+            }
+        }
+        "finish" => Action::Finish { output: Some(fallback_text.to_string()) },
+        "web_search" => Action::WebSearch { query: tc.function.arguments.clone(), num_results: None },
+        "web_fetch" => Action::WebFetch { url: tc.function.arguments.clone(), max_chars: None },
+        "ask_user" => Action::AskUser { question: tc.function.arguments.clone() },
+        _ => Action::Finish { output: Some(fallback_text.to_string()) },
+    }
 }
 
 fn action_type_name(action: &Action) -> &'static str {
@@ -813,6 +908,10 @@ fn action_type_name(action: &Action) -> &'static str {
         Action::PlanStepComplete { .. } => "plan_step_complete",
         Action::PlanStepFail { .. } => "plan_step_fail",
         Action::PlanStatus {} => "plan_status",
+        Action::CreateSkill { .. } => "create_skill",
+        Action::InvokeSkill { .. } => "invoke_skill",
+        Action::ListSkills { .. } => "list_skills",
+        Action::DeleteSkill { .. } => "delete_skill",
     }
 }
 
@@ -953,6 +1052,10 @@ RULES:
 - Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#;
 
     let behavior_note = behavior.system_prompt_note();
+    let skill_injection = ctx.skill_registry
+        .lock()
+        .map(|r| r.as_prompt_injection())
+        .unwrap_or_default();
 
     if supports_native_tools {
         format!(
@@ -973,13 +1076,14 @@ RULES:
 - OS: {os} — use {shell} syntax for shell commands
 - Current mode: {mode}
 - Behavioral mode: {behavior_name}
-- Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
+- Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}{skill_injection}"#,
             mode = mode, ws = ws, behavior_name = behavior.as_str(),
             conversational_note = conversational_note,
             planning_note = planning_note,
             behavior_note = if behavior_note.is_empty() { String::new() } else { format!("\n{}\n", behavior_note) },
             tool_docs = tool_docs, tool_instructions = tool_instructions,
             os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
+            skill_injection = skill_injection,
         )
     } else {
         let tool_instructions_sim = r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
@@ -1022,13 +1126,14 @@ RULES:
 - OS: {os} — use {shell} syntax for shell commands
 - Current mode: {mode}
 - Behavioral mode: {behavior_name}
-- Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}"#,
+- Use "pattern": "*" (not "*.*") to match ALL files{doc_context}{memory}{skill_injection}"#,
             mode = mode, ws = ws, behavior_name = behavior.as_str(),
             conversational_note = conversational_note,
             planning_note = planning_note,
             behavior_note = if behavior_note.is_empty() { String::new() } else { format!("\n{}\n", behavior_note) },
             tool_docs = tool_docs, tool_instructions_sim = tool_instructions_sim,
             os = os_hint, shell = shell_hint, doc_context = doc_context, memory = memory_context,
+            skill_injection = skill_injection,
         )
     }
 }

@@ -475,7 +475,35 @@ pub async fn run_test_tools(ctx: AppContext) -> anyhow::Result<()> {
         println!("   → {}", result);
     }
 
-    // 6. Verify all tools are registered
+    // 6. Skill tools
+    println!("\n1b. Testing skill tools...");
+    let create_action = Action::CreateSkill {
+        name: "test-skill".into(),
+        description: "A test skill".into(),
+        params_schema: None,
+        steps: vec![
+            crate::models::action::SkillStepDef {
+                tool: "read_file".into(),
+                args: serde_json::json!({"path": "Cargo.toml"}),
+            },
+        ],
+    };
+    println!("   ✓ create_skill: {}", create_action.description());
+    let list_action = Action::ListSkills { keyword: None };
+    println!("   ✓ list_skills: {}", list_action.description());
+    let invoke_action = Action::InvokeSkill { name: "nonexistent".into(), params: None };
+    println!("   ✓ invoke_skill: {}", invoke_action.description());
+    let delete_action = Action::DeleteSkill { name: "test-skill".into() };
+    println!("   ✓ delete_skill: {}", delete_action.description());
+    // Execute create → list → delete
+    let result = ToolExecutor::execute(&create_action, &ctx, &registry).await?;
+    println!("   → create: {}", result);
+    let result = ToolExecutor::execute(&list_action, &ctx, &registry).await?;
+    println!("   → list: {}", result);
+    let result = ToolExecutor::execute(&delete_action, &ctx, &registry).await?;
+    println!("   → delete: {}", result);
+
+    // 7. Verify all tools are registered
     println!("\n2. Verifying tool registrations...");
     let tool_names = [
         "read_file", "write_file", "execute_command", "list_directory",
@@ -483,6 +511,7 @@ pub async fn run_test_tools(ctx: AppContext) -> anyhow::Result<()> {
         "copy_file", "create_directory", "http_request", "ask_user",
         "web_search", "web_fetch", "show_changes", "restore_backup",
         "plan_create", "plan_step_complete", "plan_step_fail", "plan_status",
+        "create_skill", "invoke_skill", "list_skills", "delete_skill",
     ];
     for name in &tool_names {
         if registry.is_registered(name) {
@@ -515,6 +544,10 @@ pub async fn run_test_tools(ctx: AppContext) -> anyhow::Result<()> {
         Action::PlanStepComplete { step_id: 1, result: "r".into() },
         Action::PlanStepFail { step_id: 1, error: "e".into() },
         Action::PlanStatus {},
+        Action::CreateSkill { name: "test".into(), description: "desc".into(), params_schema: None, steps: vec![] },
+        Action::InvokeSkill { name: "test".into(), params: None },
+        Action::ListSkills { keyword: None },
+        Action::DeleteSkill { name: "test".into() },
     ];
     for action in &all_actions {
         println!("   {} (destructive: {})", action.description(), action.is_destructive());

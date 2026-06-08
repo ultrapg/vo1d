@@ -19,6 +19,8 @@ pub struct ModelEntry {
     pub min_ram_gb: f64,
     pub context_length: u32,
     pub supports_tools: bool,
+    #[serde(default)]
+    pub native_tools: bool,
     pub quantization: String,
     #[serde(default)]
     pub reasoning: bool,
@@ -68,6 +70,7 @@ impl ModelRegistry {
                 min_ram_gb: c.min_ram_gb,
                 context_length: c.context_length,
                 supports_tools: c.supports_tools,
+                native_tools: c.native_tools,
                 quantization: c.quantization,
                 reasoning: c.reasoning,
                 instruct: c.instruct,

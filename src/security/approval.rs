@@ -22,22 +22,19 @@ impl ApprovalSystem {
         println!("\n[{}] {}", self.mode, message);
         println!("Action: {}", action.description());
 
-        loop {
-            print!("Approve? (Y/n/custom instruction): ");
-            std::io::Write::flush(&mut std::io::stdout())?;
+        print!("Approve? (Y/n/custom instruction): ");
+        std::io::Write::flush(&mut std::io::stdout())?;
 
-            let mut input = String::new();
-            std::io::stdin().read_line(&mut input)?;
-            let trimmed = input.trim().to_lowercase();
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let trimmed = input.trim().to_lowercase();
 
-            match trimmed.as_str() {
-                "y" | "yes" | "" => return Ok(true),
-                "n" | "no" => return Ok(false),
-                _ => {
-                    // Custom instruction - treat as approved with modification
-                    println!("Custom instruction: {}", trimmed);
-                    return Ok(true);
-                }
+        match trimmed.as_str() {
+            "y" | "yes" | "" => Ok(true),
+            "n" | "no" => Ok(false),
+            _ => {
+                println!("Custom instruction: {}", trimmed);
+                Ok(true)
             }
         }
     }

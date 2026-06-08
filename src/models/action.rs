@@ -30,6 +30,13 @@ impl PlanStepDef {
     }
 }
 
+/// A step definition for create_skill action.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillStepDef {
+    pub tool: String,
+    pub args: serde_json::Value,
+}
+
 /// Represents an action the agent can take.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action")]
@@ -148,6 +155,29 @@ pub enum Action {
     },
     #[serde(rename = "plan_status")]
     PlanStatus {},
+    #[serde(rename = "create_skill")]
+    CreateSkill {
+        name: String,
+        description: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        params_schema: Option<serde_json::Value>,
+        steps: Vec<SkillStepDef>,
+    },
+    #[serde(rename = "invoke_skill")]
+    InvokeSkill {
+        name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        params: Option<serde_json::Value>,
+    },
+    #[serde(rename = "list_skills")]
+    ListSkills {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        keyword: Option<String>,
+    },
+    #[serde(rename = "delete_skill")]
+    DeleteSkill {
+        name: String,
+    },
 }
 
 fn default_dot() -> String {
@@ -184,6 +214,10 @@ impl Action {
             Action::PlanStepComplete { step_id, .. } => format!("Complete plan step {}", step_id),
             Action::PlanStepFail { step_id, .. } => format!("Fail plan step {}", step_id),
             Action::PlanStatus {} => "Plan status".to_string(),
+            Action::CreateSkill { name, steps, .. } => format!("Create skill '{}' ({} steps)", name, steps.len()),
+            Action::InvokeSkill { name, .. } => format!("Invoke skill '{}'", name),
+            Action::ListSkills { .. } => "List skills".to_string(),
+            Action::DeleteSkill { name } => format!("Delete skill '{}'", name),
         }
     }
 

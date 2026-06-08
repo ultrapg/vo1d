@@ -15,6 +15,8 @@ pub struct CustomModelEntry {
     pub min_ram_gb: f64,
     pub context_length: u32,
     pub supports_tools: bool,
+    #[serde(default)]
+    pub native_tools: bool,
     pub quantization: String,
     #[serde(default)]
     pub reasoning: bool,
