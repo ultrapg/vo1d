@@ -256,13 +256,27 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         let mut response_text = String::new();
+        let mut display_printed: usize = 0;
         {
             let mut stream = llm.stream_chat(&conversation).await
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
 
             while let Some(chunk) = stream.next().await {
                 match chunk {
-                    Ok(token) => response_text.push_str(&token),
+                    Ok(token) => {
+                        response_text.push_str(&token);
+
+                        // Strip think tags for display, print delta in real time
+                        if !session.tui_mode {
+                            let clean = strip_think_tags(&response_text);
+                            if clean.len() > display_printed {
+                                let new_part = &clean[display_printed..];
+                                print!("{}", new_part);
+                                std::io::Write::flush(&mut std::io::stdout())?;
+                                display_printed = clean.len();
+                            }
+                        }
+                    }
                     Err(e) => {
                         anyhow::bail!("Generation error: {}", e);
                     }
@@ -271,6 +285,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         // Strip <think> tags before any further processing
+        // (the raw response is already stripped for display above;
+        //  we strip again so parsing also sees clean text)
         response_text = strip_think_tags(&response_text);
 
         // Parse action from response
@@ -283,14 +299,10 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             }
         };
 
-        // --- Clean display of reasoning + action ---
         if !session.tui_mode {
-            let reasoning = extract_reasoning(&response_text);
-            let clean = clean_reasoning(&reasoning);
-            if !clean.is_empty() {
-                eprintln!("{}", clean);
-            }
-            eprintln!("── {}", action.description());
+            // No separate reasoning display — already streamed clean above
+            // Just print a newline after the streamed output and show the action
+            eprintln!("");
         }
 
         // Check for conversational response (no tool intent)
@@ -777,18 +789,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 fn strip_think_tags(text: &str) -> String {
     let re = Regex::new(r"(?s)<think>.*?</think>").unwrap();
     re.replace_all(text, "").to_string()
-}
-
-fn clean_reasoning(text: &str) -> String {
-    let mut s = strip_think_tags(text);
-    for label in &["STEP 1 — REASON", "STEP 2 — ACTION", "STEP 1 —", "STEP 2 —"] {
-        s = s.replace(label, "");
-    }
-    s.lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 fn action_type_name(action: &Action) -> &'static str {
