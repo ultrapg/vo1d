@@ -1,8 +1,6 @@
 # vo1d
 
-**Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, web search, plan management, reusable skills, and more. All inference runs entirely offline on your hardware.
-
-> **WORK IN PROGRESS**
+**Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp with optional Vulkan GPU acceleration) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, web search, plan management, reusable skills, and more. All inference runs entirely offline on your hardware. Downloads are verified via SHA256 checksums fetched from Hugging Face API.
 
 ## Features
 
@@ -102,7 +100,7 @@ vo1d/
     │   ├── plan.rs         # Plan, PlanStep, StepStatus structs
     │   └── tool.rs         # Tool definition
     └── utils/              # Misc utilities
-        ├── crypto.rs       # SHA256 hashing
+        ├── crypto.rs       # SHA256 hashing (including StreamingSha256 for incremental download verification)
         ├── time.rs         # Timestamp formatting
         └── stderr_guard.rs # stderr suppression for llama.cpp
 ```
@@ -139,12 +137,12 @@ cargo build --features full --release
 |------|-------------|
 | `default` | No backends enabled (CLI only) |
 | `llamacpp-builtin` | Built-in llama.cpp inference via `llama-cpp-2` |
-| `vulkan` | `llamacpp-builtin` + Vulkan GPU acceleration |
+| `vulkan` | `llamacpp-builtin` + Vulkan GPU acceleration (compiles ggml-vulkan backend; requires `VULKAN_SDK` on Windows) |
 | `ollama` | Ollama API backend |
 | `lmstudio` | LM Studio API backend |
 | `llamacpp-server` | llama.cpp server backend |
 | `custom-api` | Custom OpenAI-compatible API backend |
-| `full` | All backends |
+| `full` | All backends including `vulkan` |
 
 ### Install a Model
 
@@ -159,7 +157,7 @@ vo1d models install qwen3_1.7b
 vo1d models profile
 ```
 
-Models are downloaded from Hugging Face and stored in `models/llamacpp/` next to the binary.
+Models are downloaded from Hugging Face and stored in `models/llamacpp/` next to the binary. Each download is verified with **streaming SHA256** — the checksum is fetched from the Hugging Face API at download time and verified incrementally as data streams in, eliminating the need for hardcoded checksums in config files.
 
 ---
 
@@ -404,6 +402,7 @@ Skills are reusable, named multi-step procedures that the agent can create, stor
 - **Parameter interpolation** — Call-site params are merged into step args (template vars like `{{name}}`)
 - **Persistence** — Each skill stored as `skills/<name>.json`; loaded on startup
 - **Prompt injection** — Available skills are listed in the system prompt (capped at ~1500 chars)
+- **Recursion protection** — Circular skill invocations are capped at 10 levels to prevent infinite loops
 - **Validation** — Names must match `^[a-z0-9][a-z0-9-]{0,63}$`
 - **Atomic writes** — Skills are written via temp file + rename to prevent corruption
 
@@ -418,6 +417,22 @@ Skills are reusable, named multi-step procedures that the agent can create, stor
 | **PowerUser** | ✅ Ask | ✅ Ask | ✅ Ask | ✅ Ask | ❌ Blocked |
 | **Autonomous** | ✅ Auto | ✅ Auto | ✅ Ask | ❌ Blocked | ❌ Blocked |
 | **YOLO** | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto |
+
+### Security & Robustness Features
+
+- **SHA256 download verification** — Model checksums fetched from Hugging Face API at download time and verified incrementally via streaming SHA256 hasher; no hardcoded checksums needed in config
+- **Token-aware command blacklist** — Blacklist patterns are matched token-by-token, preventing indirection bypass (e.g., `rm -rf /` vs `rm -rf /tmp` are distinguished correctly even with shell expansion)
+- **Curriculum setup whitelist** — Dangerous operations (format, shutdown, reg delete, etc.) are blocked in curriculum setup commands
+- **Recursion depth limit** — Circular skill invocations are detected and capped at 10 levels
+- **Plan recovery counter** — Plan failure recovery uses a `u32` counter (up to 3 recovery attempts before giving up)
+- **Memory size cap** — Memory serialization is capped at 50 MB to prevent resource exhaustion
+- **CancellationToken for graceful shutdown** — Ctrl+C triggers a `CancellationToken` for clean shutdown instead of abrupt termination
+- **Workspace sandbox escape prevention** — `resolve_workspace_path()` validates that resolved paths stay within the sandbox, blocking directory traversal attacks
+- **Output size limits** — Tool return values are truncated at 1 MB to prevent context overflow
+- **Session versioning** — Sessions carry a `version` field with automatic migration for forward compatibility
+- **Compiled-once Regex** — Tool parser regex is compiled once in `ToolParser::new()` instead of per-call
+- **Async file I/O** — All session and config I/O uses `tokio::fs` for non-blocking operations
+- **Error source chain preservation** — `Vo1dError` variants carry `#[source]` attributes preserving the full error chain via `std::error::Error::source()`
 
 ## Behavior Modes
 
@@ -665,7 +680,7 @@ backend = "builtin"
 context_size = 8192
 batch_size = 4096
 threads = -1              # -1 = auto-detect CPU core count
-gpu_layers = 0            # 0 = CPU only, -1 = all layers
+gpu_layers = -1           # 0 = CPU only, -1 = all layers (auto-detects GPU at runtime)
 temperature = 0.7
 top_p = 0.9
 top_k = 40
@@ -684,7 +699,11 @@ model_name = ""
 behavior = "normal"
 ```
 
-Additional settings: `workspace_path`, `network_whitelist`, `command_blacklist` (11 dangerous commands blocked by default), `max_iterations` (default 999999), `command_timeout_secs` (default 60), `max_backups` (default 10), `default_model`.
+Additional settings: `workspace_path`, `network_whitelist`, `command_blacklist` (11 dangerous commands blocked by default, matches are token-aware to prevent indirection bypass), `max_iterations` (default 999999), `command_timeout_secs` (default 60), `max_backups` (default 10), `default_model`.
+
+### GPU Auto-Detection
+
+When built with `--features vulkan`, vo1d automatically detects GPU offload capability at model load time via `llama_supports_gpu_offload()`. If a compatible GPU is available, all layers are offloaded by default (`gpu_layers = -1`). If no GPU is detected at runtime, it gracefully falls back to CPU with a warning. Set `gpu_layers = 0` explicitly to force CPU-only.
 
 ---
 
@@ -853,7 +872,7 @@ Compatible Models:
   ... and 3 more compatible models
 ```
 
-The profiler checks: CPU model and core count, total and available RAM, GPU vendor/name/dedicated VRAM, overall hardware tier (Low/Medium/High), and compatible models from the registry.
+The profiler checks: CPU model and core count, total and available RAM, GPU vendor/name/dedicated VRAM, overall hardware tier (Low/Medium/High), and compatible models from the registry. When built with `--features vulkan`, `LlamaBackend::supports_gpu_offload()` is queried at model load time to confirm Vulkan acceleration is available.
 
 ---
 
@@ -903,14 +922,15 @@ The profiler checks: CPU model and core count, total and available RAM, GPU vend
 - **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable. Each iteration: model generates response (streamed in real time — `<think>` blocks as `─── Reasoning ───`, tool calls as `─── Tool Call ───`, results as `─── Result ───`) → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking → skill resolution → behavior enforcement → context compression if needed. Auto-restarts if model repeats same action 5+ times.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Implementations: builtin (llama.cpp), ollama, lmstudio, llamacpp-server, custom-api. Pluggable design.
 - **Tool System**: Registry of 24 tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup, plan tools (create, complete, fail, status), skill tools (create, invoke, list, delete).
-- **Security Manager**: Evaluates each action against the current mode. Approve, ask, or block. All decisions audited.
+- **Security Manager**: Evaluates each action against the current mode. Approve, ask, or block. All decisions audited. Includes token-aware command blacklist and sandbox escape prevention.
 - **Doc Provider**: Loads 10 markdown docs from `docs/` into system prompt.
-- **Memory System**: 6 stores (task history, preferences, patterns, solutions, mistakes, notes). Similarity matching, plan template matching, action sequence tracking.
-- **Skill Registry**: Loads skills from `skills/` directory. Create, delete, list, get, resolve steps into actions. Prompt injection of available skills.
+- **Memory System**: 6 stores (task history, preferences, patterns, solutions, mistakes, notes). Similarity matching, plan template matching, action sequence tracking. Capped at 50 MB.
+- **Skill Registry**: Loads skills from `skills/` directory. Create, delete, list, get, resolve steps into actions. Prompt injection of available skills. Recursion capped at 10 levels.
 - **Self-Correction**: `FailureTracker` monitors consecutive failures; `ErrorClassifier` + `error_suggestions` produce markdown suggestions.
-- **Plan System**: Plan tools for structured multi-step execution with auto-advancement. PLAN.md fallback via `plan_parser`.
-- **Behavior Engine**: Read-only phases, plan requirements, mode-specific prompt notes.
-- **Context Compressor**: Two-phase prune+compact at >100% usage; LLM summarization at >60%. Summaries stored in memory.
+- **Plan System**: Plan tools for structured multi-step execution with auto-advancement. PLAN.md fallback via `plan_parser`. Recovery counter up to 3 retries.
+- **Behavior Engine**: Read-only phases, plan requirements, mode-specific prompt notes. TDD phase transitions are plan-independent.
+- **Context Compressor**: Two-phase prune+compact at >100% usage; LLM summarization at >60%. Summaries stored in memory. Output truncated at 1 MB.
+- **Download Verifier**: Streaming SHA256 checksum verification during model download; checksum fetched from Hugging Face API.
 
 ---
 
@@ -933,7 +953,7 @@ vo1d is fully portable:
 ### Running Tests
 
 ```bash
-# Run all unit tests
+# Run all unit tests (85+ tests)
 cargo test
 
 # Run integration tests (6 test files)
@@ -946,6 +966,9 @@ cargo test --test file_ops
 
 # Run tests with a specific feature
 cargo test --features llamacpp-builtin
+
+# Build with Vulkan GPU support
+cargo build --features vulkan --release
 ```
 
 ### Code Style
@@ -966,17 +989,20 @@ cargo test --features llamacpp-builtin
 | `llama_context: n_batch = 512` then crash | Delete `config/settings.toml` or set `batch_size = 4096` |
 | `Model file not found` | Run `vo1d models install <model-id>` |
 | `spawn_blocking panicked` in `builtin.rs` | Check RAM usage, reduce `context_size` or `gpu_layers` |
+| Vulkan not found at runtime | Ensure `VULKAN_SDK` is installed and `vulkan-1.dll` is on `PATH`. Build with `--features vulkan` |
+| Vulkan build fails on Windows | Install Vulkan SDK from https://vulkan.lunarg.com/ |
 | Model keeps generating infinite tool calls | Check ChatML prompt format. Qwen3 expects `<|im_start|>` tags |
 | LLM output garbled with C library stderr | Verify `stderr_guard.rs` compiled correctly |
 | Build fails with linker errors on Windows | Need MSVC build tools; `+crt-static` must NOT be in `.cargo/config.toml` |
 | Curriculum file not found on disk | All curricula are embedded in the binary — run `vo1d train <name>` |
 | Skill file won't load | Check JSON syntax and that name matches `^[a-z0-9][a-z0-9-]{0,63}$` |
+| Session won't load after update | Session migration runs automatically — old sessions are upgraded on resume |
 
 ---
 
 ## Model Registry
 
-vo1d includes a built-in catalog of compatible models defined in `config/default_models.toml`.
+vo1d includes a built-in catalog of compatible models defined in `config/default_models.toml` (default) and `config/models.toml` (user overrides).
 
 ### Adding a Custom Model
 
@@ -988,12 +1014,12 @@ name = "My Custom Model"
 provider = "huggingface"
 download_url = "https://huggingface.co/author/model/resolve/main/model.gguf"
 filename = "model.gguf"
-sha256 = "abcdef12345..."
+sha256 = ""                          # Auto-fetched from Hugging Face API at download time
 size_bytes = 2000000000
 min_ram_gb = 4.0
 context_length = 4096
 supports_tools = false
-native_tools = false     # set true if model supports structured function calling
+native_tools = false                 # set true if model supports structured function calling
 quantization = "Q4_K_M"
 ```
 
