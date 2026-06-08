@@ -203,7 +203,7 @@ vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **LLM-powered context
 
 1. **System prompt** is constructed with current mode, workspace path, memory context, available tools, **and markdown documentation** (loaded from `docs/`)
 2. **User task** is appended as a message (ChatML format: `<|im_start|>system` / `<|im_start|>user` / `<|im_start|>assistant`)
-3. **Model generates** a response containing a JSON action block
+3. **Model generates** a response — tokens stream to console in real time. `<think>...</think>` blocks are stripped from the displayed output (still kept in the conversation for context)
 4. **Parser extracts** the JSON action (e.g. `{"action": "web_search", "query": "rust programming"}`) from plain JSON, markdown code blocks, or heuristic patterns
 5. **Security policy** evaluates the action against the current mode
 6. **Action is executed** and the result (or error) is appended to the conversation
@@ -1029,7 +1029,7 @@ The profiler checks:
 
 - **CLI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or `vo1d train`.
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider. Cloned per task.
-- **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable indefinitely. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking (via plan tools or PLAN.md) → behavior mode enforcement (read-only phase) → context compression if needed. If the model repeats the same action 5+ times, the iteration restarts automatically.
+- **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable indefinitely. Each iteration: model generates response (streamed to console in real time with `<think>...</think>` stripped from display) → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking (via plan tools or PLAN.md) → behavior mode enforcement (read-only phase) → context compression if needed. If the model repeats the same action 5+ times, the iteration restarts automatically.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Current implementations: `builtin` (llama.cpp via `llama-cpp-2`). Backends are pluggable.
 - **Tool System**: Registry of 20 available tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup, and plan tools (create, complete, fail, status).
 - **Security Manager**: Evaluates each action against the current mode. Can approve, ask, or block. All decisions are audited.
@@ -1077,7 +1077,7 @@ cargo test --features llamacpp-builtin
 - `serde` derives for all data structs
 - `anyhow::Result` for error propagation
 - `tracing` for logging (not `println`/`eprintln` in library code)
-- CLI output uses `print!`/`eprintln!` (only in `loop_.rs`, guarded by `session.tui_mode`)
+- CLI output uses `print!`/`eprintln!` (only in `loop_.rs`, guarded by `session.tui_mode`). Model output streams token-by-token with `<think>...</think>` blocks stripped from display
 - No unsafe code unless absolutely necessary (see `stderr_guard.rs`)
 
 ---
