@@ -27,7 +27,7 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 description = "VO1D - Local-first autonomous AI execution agent"
-authors = ["VO1D Contributors"]
+authors = ["ultrapg"]
 
 [lib]
 name = "vo1d"
