@@ -1,6 +1,6 @@
 # vo1d
 
-**Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp with optional Vulkan GPU acceleration) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, web search, plan management, reusable skills, and more. All inference runs entirely offline on your hardware. Downloads are verified via SHA256 checksums fetched from Hugging Face API.
+**Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp with optional Vulkan GPU acceleration) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, web search, plan management, reusable skills, and more. All inference runs entirely offline on your hardware.
 
 ## Philosophy
 
@@ -30,7 +30,7 @@ vo1d is built on the principle that AI agents should be **private, offline, and 
 - **Interactive REPL** — Chat-like interface for iterative task execution
 - **Session management** — Save, resume, and checkpoint long-running tasks
 - **Fully portable** — All data stored relative to the executable; runs from any folder
-- **SHA256 download verification** — Model checksums fetched from Hugging Face API at download time, verified incrementally via streaming SHA256 hasher
+- **Model management** — Download, install, and manage multiple models with automatic dependency handling
 - **Vulkan GPU acceleration** — Optional GPU offload for built-in llama.cpp backend, compatible with AMD, NVIDIA, and Intel GPUs via Vulkan API
 - **Runtime GPU auto-detection** — GPU support is detected at model load time; same binary works with or without a compatible GPU
 - **Graceful GPU fallback** — Falls back to CPU with a warning if no GPU is available at runtime
@@ -73,7 +73,7 @@ vo1d/
     ├── llm/                # LLM backends
     │   ├── backend.rs      # LlmBackend trait (chat, stream_chat)
     │   ├── registry.rs     # Model registry
-    │   ├── downloader.rs   # Hugging Face model downloader with streaming SHA256 verification
+    │   ├── downloader.rs   # Hugging Face model downloader with progress tracking
     │   ├── builtin.rs      # llama.cpp built-in backend with GPU auto-detection
     │   ├── ollama.rs       # Ollama API backend (cfg: ollama)
     │   ├── lmstudio.rs     # LM Studio backend (cfg: lmstudio)
@@ -108,7 +108,7 @@ vo1d/
     │   ├── plan.rs         # Plan, PlanStep, StepStatus structs
     │   └── tool.rs         # Tool definition
     └── utils/              # Misc utilities
-        ├── crypto.rs       # SHA256 hashing (including StreamingSha256 for incremental download verification)
+
         ├── time.rs         # Timestamp formatting
         └── stderr_guard.rs # stderr suppression for llama.cpp
 ```
@@ -154,7 +154,7 @@ Without the Vulkan SDK, you can still build with CPU-only backends (`llamacpp-bu
 ### Build
 
 ```bash
-git clone https://github.com/your-username/vo1d.git
+git clone https://github.com/ultrapg/vo1d.git
 cd vo1d
 
 # Build with built-in llama.cpp (CPU only, no Vulkan SDK needed)
@@ -201,7 +201,7 @@ vo1d models install qwen3_1.7b
 vo1d models profile
 ```
 
-Models are downloaded from Hugging Face and stored in `models/llamacpp/` next to the binary. Each download is verified with **streaming SHA256** — the checksum is fetched from the Hugging Face API at download time and verified incrementally as data streams in, eliminating the need for hardcoded checksums in config files.
+Models are downloaded from Hugging Face and stored in `models/llamacpp/` next to the binary. Downloads include progress tracking and automatic resume support.
 
 ---
 
@@ -644,7 +644,7 @@ Skill step arguments support template variables using `{{variable_name}}` syntax
 
 ### Security & Robustness Features
 
-- **SHA256 download verification** — Model checksums fetched from Hugging Face API at download time and verified incrementally via streaming SHA256 hasher; no hardcoded checksums needed in config
+- **Model management** — Download, install, and manage multiple models with progress tracking and automatic resume
 - **Token-aware command blacklist** — Blacklist patterns are matched token-by-token, preventing indirection bypass (e.g., `rm -rf /` vs `rm -rf /tmp` are distinguished correctly even with shell expansion)
 - **Default blacklist** — 11 dangerous commands blocked by default: `rm -rf /`, `mkfs`, `dd if=`, `format `, `del /f /s /q`, `rd /s /q`, `reg delete`, `sc delete`, `systemctl disable`, `shutdown`, `reboot`
 - **Curriculum setup whitelist** — Dangerous operations (format, shutdown, reg delete, etc.) are blocked in curriculum setup commands
@@ -1393,7 +1393,7 @@ Models are marked compatible if they fit within available RAM (or VRAM with GPU 
 - **Plan System**: Plan tools for structured multi-step execution with auto-advancement. PLAN.md fallback via `plan_parser`. Recovery counter up to 3 retries.
 - **Behavior Engine**: Read-only phases, plan requirements, mode-specific prompt notes. TDD phase transitions are plan-independent.
 - **Context Compressor**: Two-phase prune+compact at >100% usage; LLM summarization at >60%. Summaries stored in memory. Output truncated at 1 MB.
-- **Download Verifier**: Streaming SHA256 checksum verification during model download; checksum fetched from Hugging Face API.
+- **Download Manager**: Progress tracking and automatic resume for model downloads
 - **Hardware Profiler**: `sysinfo`-based CPU/GPU/RAM detection with tier classification and model compatibility matching.
 - **Session Manager**: UUID-based session tracking, checkpointing every 5 iterations, auto-migration for version upgrades.
 - **Audit Logger**: JSONL-based structured logging with per-action entries including security context and approval status.
@@ -1511,7 +1511,7 @@ The workspace uses these key dependencies:
 | `serde` / `serde_json` / `toml` | Serialization |
 | `reqwest` | HTTP client (rustls-tls, no native deps) |
 | `llama-cpp-2` | Built-in LLM inference (optional) |
-| `sha2` | SHA256 hashing |
+
 | `tracing` / `tracing-subscriber` | Structured logging |
 | `thiserror` / `anyhow` | Error handling |
 | `sysinfo` | Hardware profiling |
@@ -1614,7 +1614,7 @@ name = "My Custom Model"
 provider = "huggingface"
 download_url = "https://huggingface.co/author/model/resolve/main/model.gguf"
 filename = "model.gguf"
-sha256 = ""                          # Auto-fetched from Hugging Face API at download time
+# sha256 field removed - no longer used for verification
 size_bytes = 2000000000
 min_ram_gb = 4.0
 context_length = 4096
@@ -1632,7 +1632,7 @@ quantization = "Q4_K_M"
 | `provider` | string | Source provider (currently only `huggingface`) |
 | `download_url` | string | Direct download URL for the GGUF file |
 | `filename` | string | Local filename for the downloaded model |
-| `sha256` | string | SHA256 checksum (optional — auto-fetched from Hugging Face API) |
+| `sha256` | string | (Removed - no longer used for verification) |
 | `size_bytes` | integer | File size in bytes (used for compatibility checking) |
 | `min_ram_gb` | float | Minimum RAM required (in GB) |
 | `context_length` | integer | Maximum context length in tokens |
@@ -1697,7 +1697,7 @@ If vo1d crashes or is interrupted during a task:
 
 ### Data Integrity
 
-- All model downloads are verified with streaming SHA256 checksums
+- All model downloads include progress tracking and automatic resume
 - Skills are saved atomically (write to temp file, then rename)
 - Session state is written atomically to prevent corruption
 - Memory serialization is capped at 50 MB to prevent resource exhaustion
