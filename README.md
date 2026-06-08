@@ -12,7 +12,7 @@
 - **16 built-in tools** — File operations, shell commands, web tools, change tracking, restore
 - **Web tools** — Web search (DuckDuckGo) and web page fetching (HTML→markdown conversion)
 - **File & shell tools** — Complete file operations, command execution, directory management, HTTP requests
-- **Context compression** — Opencode-style two-phase pruning & compacting (prune oversized tool outputs + compact old messages)
+- **Context compression** — Two-phase pruning & compacting (prune oversized tool outputs + compact old messages). At ~90% window usage, uses LLM summarization to preserve information intelligently instead of dropping messages
 - **Training curriculum** — Progressive learning system with 13 built-in curricula, real-world testing environments, and autotrain mode (`vo1d train --all`)
 - **Self-correction system** — Failure tracking, error classification with tailored suggestions, auto-correction prompts after repeated failures
 - **Documentation-driven system prompt** — Markdown docs loaded at startup and injected into system prompt for better tool usage guidance
@@ -20,6 +20,7 @@
 - **Self-improvement through training** — Training stores successful solutions and records mistakes as lessons; future tasks receive relevant past experiences injected into the prompt
 - **PLAN.md workflow** — Model creates a step-by-step plan file before execution, then works through it methodically with automatic step tracking and recovery
 - **Behavior modes** — Normal, Fix, Research, Refactor, and TDD modes each enforce read-only phases, plan requirements, and mode-specific system prompt notes
+- **Limitless iterations** — No hard iteration cap; contexts stay manageable via intellig ent compression. If the model repeats the same action 5+ times, the iteration restarts automatically to break the loop
 - **Audit logging** — Every action is logged with timestamps and security context
 - **Hardware profiling** — Auto-detects CPU/GPU/RAM and recommends compatible models
 - **Interactive REPL** — Chat-like interface for iterative task execution
@@ -180,13 +181,19 @@ vo1d train curriculum/my_custom_curriculum.json
 
 # Run all curricula with failure retry policy
 vo1d train --all --on-failure retry
+
+# Auto-approve all actions (skip prompts)
+vo1d task "update all dependencies" --yes
+
+# Test context compression (fills window, then compresses)
+vo1d test compression
 ```
 
 ---
 
 ## How It Works
 
-vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **context compression**:
+vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **LLM-powered context compression**:
 
 1. **System prompt** is constructed with current mode, workspace path, memory context, available tools, **and markdown documentation** (loaded from `docs/`)
 2. **User task** is appended as a message (ChatML format: `<|im_start|>system` / `<|im_start|>user` / `<|im_start|>assistant`)
@@ -195,27 +202,30 @@ vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **context compression
 5. **Security policy** evaluates the action against the current mode
 6. **Action is executed** and the result (or error) is appended to the conversation
 7. **Self-correction** checks for repeated failures per action type (≥3 consecutive → auto-correction prompt injected in next iteration)
-8. **Context compression** occurs if conversation exceeds ~80% of context limit:
-   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 chars) with length markers
-   - **Phase 2 (Compact)**: Keep system prompt, user task, and recent messages; compress old sections into summary markers
+8. **Context compression** occurs before the LLM call when the conversation exceeds limits:
+   - **~70–90% usage**: Two-phase prune + compact (truncate oversized tool outputs, keep critical + recent messages)
+   - **\>90% usage**: LLM summarization — the model summarizes older messages, preserving information intelligently instead of dropping them
+   - Summaries are stored in memory for future reference
 9. **PLAN.md tracking** (after iteration 1): If PLAN.md exists in workspace, the loop tracks step progress, iteration counts per step, and injects stuck/recovery messages as needed
 10. **Behavior mode enforcement**: Fix/Research modes enforce a read-only phase (blocking writes for first 5 iterations)
-11. **Loop repeats** with the updated conversation until `finish` is called or max iterations reached
+11. **Loop repeats** with the updated conversation until `finish` is called. No hard iteration limit — context compression keeps conversations manageable indefinitely. If the model repeats the same action 5+ times, the iteration restarts automatically to break the loop
 
 ```
   User input → [System Prompt + Conversation] → LLM → JSON Action
-                                                        ↓
-                                                Security Policy
-                                                        ↓
-                                                Tool Executor → Result
-                                                        ↓
-                                                Append to Conversation
-                                                        ↓
-                                          Plan Tracking + Behavior Check
-                                                        ↓
-                                                Context Compression (if needed)
-                                                        ↓
-                                                Loop or Finish
+                                                         ↓
+                                                 Security Policy
+                                                         ↓
+                                                 Tool Executor → Result
+                                                         ↓
+                                                 Append to Conversation
+                                                         ↓
+                                           Plan Tracking + Behavior Check
+                                                         ↓
+                                             Context Compression (if needed)
+                                          • >90% → LLM summarization
+                                          • 70–90% → prune + compact
+                                                         ↓
+                                                 Loop or Finish
 ```
 
 ---
@@ -422,30 +432,35 @@ Fix and Research modes include mode-specific guidance in the system prompt.
 
 ## Context Compression
 
-To handle long conversations within limited context windows, vo1d implements **opencode-style context compression** that activates when the conversation exceeds ~80% of the model's context limit.
+To handle long conversations within limited context windows, vo1d uses a **two-tier compression strategy** that activates before each LLM call.
 
 ### Compression Strategy
 
-1. **Two-Phase Process**:
-   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 characters)
-   - **Phase 2 (Compact)**: Apply sliding window to keep critical messages
+1. **Tier 1 — Prune + Compact (~70–90% usage)**:
+   - **Phase 1 (Prune)**: Truncate oversized tool outputs (>2000 characters) with length markers
+   - **Phase 2 (Compact)**: Apply sliding window — always keep system prompt and first user task, keep last 8+ messages, drop older messages with summary markers stored in memory
 
-2. **Priority-Based Message Selection**:
-   - **Critical**: System prompt (always kept)
-   - **High**: User's original task (always kept)
-   - **Normal**: Recent assistant/user messages (last 8+ messages)
-   - **Low**: Recent tool results (truncated if long)
-   - **Background**: Old messages (compressed into summaries)
+2. **Tier 2 — LLM Summarization (>90% usage)**:
+   - When the conversation exceeds ~90% of the context limit, the LLM is called with a summarization prompt
+   - Old messages (keeping system prompt + first task + last 8 messages) are sent to the LLM for summarization
+   - The LLM's summary replaces the old messages as a structured system message
+   - The full raw summary is stored in memory for future reference
+   - If the summarization call fails, the system falls back to prune + compact
 
-3. **Memory Integration**: Compressed sections are summarized and stored in the memory system for future reference.
+3. **Memory Integration**: Compressed/summarized sections are stored in the memory system for future reference.
+
+### Why Summarization Instead of Dropping?
+
+Traditional compression drops old messages entirely, losing context. LLM summarization preserves information — the model can still reference past decisions, file contents, and reasoning through the summary.
 
 ### Configuration
 
-Compression settings are configurable in `settings.toml`:
 ```toml
 [llm.builtin]
-context_size = 4096
-# Compression happens at ~80% usage (3276 tokens)
+context_size = 8192
+# Compression triggers at various usage thresholds
+# ~70%: prune + compact
+# ~90%: LLM summarization
 ```
 
 ## Train Mode
@@ -600,11 +615,11 @@ vo1d supports a structured plan-driven workflow where the model creates and foll
 1. **After iteration 1**, the loop checks if PLAN.md exists in the workspace
 2. **Parsing**: The `plan_parser` extracts steps from `## Step N:` headers, numbered lists, and checkbox items
 3. **Step tracking**: The loop tracks the current step, iteration count per step, and failure count per step
-4. **Dynamic iteration limits**: Per-step limits adjust based on task complexity (15/30/100 iterations for short/medium/complex tasks), capped by `max_iterations`
-5. **Stuck detection**: After 10 iterations on the same step, a warning message is injected
-6. **Plan recovery**: After 3 consecutive evaluation failures on the same step, a replanning suggestion message is injected
-7. **Checkbox updates**: The model is expected to update checkboxes (`[x]`) as it completes sub-tasks
-8. **Plan re-parsing**: If PLAN.md is rewritten, the plan is re-parsed and step tracking resets
+4. **Stuck detection**: After 10 iterations on the same step, a warning message is injected
+5. **Plan recovery**: After 3 consecutive evaluation failures on the same step, a replanning suggestion message is injected
+6. **Checkbox updates**: The model is expected to update checkboxes (`[x]`) as it completes sub-tasks
+7. **Plan re-parsing**: If PLAN.md is rewritten, the plan is re-parsed and step tracking resets
+8. **Terminal TODO display**: Each iteration prints a live plan overview showing goal, step counts (done/pending/failed), and per-step status with markers (`✓`, `✗`, `→`, `☐`)
 
 ### Plan Templates from Memory
 
@@ -688,7 +703,7 @@ vo1d creates `config/settings.toml` next to the binary on first run:
 backend = "builtin"
 
 [llm.builtin]
-context_size = 4096
+context_size = 8192
 batch_size = 4096
 threads = -1              # -1 = auto-detect CPU core count
 gpu_layers = 0            # 0 = CPU only, -1 = all layers
@@ -838,6 +853,7 @@ Commands:
   models    List and manage models
   sessions  List and manage saved sessions
   train     Run a training curriculum (e.g. `vo1d train 00_hello_world`)
+  test      Run system tests (e.g. `vo1d test compression`)
   memory    Manage VO1D's memory and learning
   config    View current configuration
   logs      View audit logs
@@ -850,13 +866,14 @@ Options:
                                   (normal, fix, research, refactor, tdd)
       --workspace <DIR>         Custom workspace directory
       --yolo                    Enable YOLO mode (implies --mode yolo)
-      --yes                     Auto-approve all actions (Interactive/PowerUser only)
+      --yes, --jes              Auto-approve all actions (Interactive/PowerUser only)
       --debug                   Enable verbose debug tracing
       --resume <ID>             Resume a session by ID
   -h, --help                    Print help
   -V, --version                 Print version
 
 Subcommands:
+  test compression      Test context compression by filling context window
   train --all --on-failure <POLICY>   Autotrain failure policy
                                         (stop, skip, retry)
   models list               List all available models
@@ -939,7 +956,7 @@ The profiler checks:
 
 - **CLI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or `vo1d train`.
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider. Cloned per task.
-- **Agent Loop**: Iterates up to `max_iterations` per curriculum task. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking (PLAN.md step progress) → behavior mode enforcement (read-only phase) → context compression if needed.
+- **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable indefinitely. Each iteration: model generates response → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking (PLAN.md step progress) → behavior mode enforcement (read-only phase) → context compression if needed. If the model repeats the same action 5+ times, the iteration restarts automatically.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Current implementations: `builtin` (llama.cpp via `llama-cpp-2`). Backends are pluggable.
 - **Tool System**: Registry of 16 available tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup.
 - **Security Manager**: Evaluates each action against the current mode. Can approve, ask, or block. All decisions are audited.
@@ -948,7 +965,7 @@ The profiler checks:
 - **Self-Correction**: `FailureTracker` monitors consecutive failures per action type; `ErrorClassifier` and `error_suggestions` produce detailed markdown suggestions.
 - **Plan Parser**: Flexible markdown parser that extracts step headers, numbered lists, checkboxes, and action keywords from PLAN.md files.
 - **Behavior Engine**: Enforces read-only phases, plan requirements, and mode-specific system prompt notes based on behavior mode.
-- **Context Compressor**: Two-phase pruning + compacting when conversation exceeds ~80% of context limit.
+- **Context Compressor**: Two-phase prune + compact at ~70–90% usage; LLM summarization at >90% usage when summarization preserves information better than dropping messages.
 
 ---
 
