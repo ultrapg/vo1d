@@ -141,15 +141,21 @@ pub async fn list_models(ctx: &AppContext) -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<30} {:<10} {:<7} {:<7} {:<8} {:<20}",
-        "ID", "Name", "Size", "Reason", "Instr", "RAM", "Status");
-    println!("{}", "-".repeat(110));
+    // Compute dynamic column widths
+    let max_id = all.iter().map(|m| m.id.len()).max().unwrap_or(10).max(10);
+    let max_name = all.iter().map(|m| m.name.len()).max().unwrap_or(20).max(20);
+    let total_width = max_id + max_name + 10 + 5 + 5 + 8 + 3 + 18;
+
+    println!("{:<id$} {:<name$} {:<10} {:<5} {:<5} {:<8} {:>3}",
+        "ID", "Name", "Size", "Reas", "Inst", "RAM", "",
+        id = max_id, name = max_name);
+    println!("{}", "-".repeat(total_width));
 
     for model in all {
         let status = if ctx.model_registry.is_installed(model) {
-            "✓".to_string()
+            "✓"
         } else {
-            "✗".to_string()
+            "✗"
         };
 
         let size_gb = model.size_bytes as f64 / 1_073_741_824.0;
@@ -159,14 +165,15 @@ pub async fn list_models(ctx: &AppContext) -> Result<()> {
             format!("{:.0} MB", model.size_bytes as f64 / 1_048_576.0)
         };
 
-        println!("{:<20} {:<30} {:<10} {:<7} {:<7} {:<8} {:<20}",
+        println!("{:<id$} {:<name$} {:<10} {:<5} {:<5} {:<8} {:>3}",
             model.id,
-            model.name.chars().take(30).collect::<String>(),
+            model.name,
             size_str,
             if model.reasoning { "✓" } else { "" },
             if model.instruct { "✓" } else { "" },
             format!("{:.0} GB", model.min_ram_gb),
             status,
+            id = max_id, name = max_name,
         );
     }
 
