@@ -10,7 +10,6 @@ pub struct CustomModelEntry {
     pub provider: String,
     pub download_url: String,
     pub filename: String,
-    pub sha256: String,
     pub size_bytes: u64,
     pub min_ram_gb: f64,
     pub context_length: u32,

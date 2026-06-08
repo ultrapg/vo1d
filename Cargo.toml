@@ -75,7 +75,6 @@ sysinfo = "0.33"
 which = "7"
 
 # Security / Crypto
-sha2 = "0.10"
 hex = "0.4"
 
 # Logging
