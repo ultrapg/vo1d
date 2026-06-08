@@ -212,6 +212,67 @@ impl ToolRegistry {
             }),
         });
 
+        tools.insert("plan_create".to_string(), ToolInfo {
+            name: "plan_create",
+            description: "Create or replace the execution plan. Call this when the task requires multiple steps. Provide a goal and ordered list of steps with dependencies.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "goal": { "type": "string", "description": "Overall goal of the plan" },
+                    "steps": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": { "type": "integer", "description": "Unique step ID" },
+                                "description": { "type": "string", "description": "Step description" },
+                                "action": { "type": "string", "description": "Action type (read_file, write_file, execute_command, etc.)" },
+                                "command": { "type": "string", "description": "Shell command if action is execute_command" },
+                                "depends_on": { "type": "array", "items": { "type": "integer" }, "description": "IDs of steps this depends on" }
+                            },
+                            "required": ["id", "description", "action"]
+                        }
+                    }
+                },
+                "required": ["goal", "steps"]
+            }),
+        });
+
+        tools.insert("plan_step_complete".to_string(), ToolInfo {
+            name: "plan_step_complete",
+            description: "Mark a plan step as completed successfully.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "step_id": { "type": "integer", "description": "ID of the step to complete" },
+                    "result": { "type": "string", "description": "Result or summary of what was accomplished" }
+                },
+                "required": ["step_id", "result"]
+            }),
+        });
+
+        tools.insert("plan_step_fail".to_string(), ToolInfo {
+            name: "plan_step_fail",
+            description: "Mark a plan step as failed. Use this when a step cannot be completed.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "step_id": { "type": "integer", "description": "ID of the step that failed" },
+                    "error": { "type": "string", "description": "Error description" }
+                },
+                "required": ["step_id", "error"]
+            }),
+        });
+
+        tools.insert("plan_status".to_string(), ToolInfo {
+            name: "plan_status",
+            description: "Get the current plan status: goal, completed/pending/failed steps, and current step.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        });
+
         tools.insert("restore_backup".to_string(), ToolInfo {
             name: "restore_backup",
             description: "Restore a file to its original state from git version control. Reverts all uncommitted changes to the specified file. Use git checkout or git restore internally.",

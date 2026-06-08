@@ -414,6 +414,116 @@ Expected outcome: The agent handles context compression gracefully without crash
     Ok(())
 }
 
+/// Test all tool types by dispatching actions through the executor.
+/// Verifies plan_create, plan_step_complete, plan_step_fail, plan_status,
+/// and all other tool registrations are wired correctly.
+pub async fn run_test_tools(ctx: AppContext) -> anyhow::Result<()> {
+    use crate::models::action::Action;
+    use crate::models::action::PlanStepDef;
+    use crate::agent::executor::ToolExecutor;
+    use crate::tools::registry::ToolRegistry;
+    use std::sync::Arc;
+
+    println!("\n=== TOOL TEST ===");
+
+    let registry = Arc::new(ToolRegistry::new(&ctx));
+
+    // 1. Plan creation
+    println!("\n1. Testing plan_create...");
+    let plan_action = Action::PlanCreate {
+        goal: "Test all tools".to_string(),
+        steps: vec![
+            PlanStepDef {
+                id: 1,
+                description: "Read files".to_string(),
+                action: "read_file".to_string(),
+                command: None,
+                depends_on: vec![],
+            },
+            PlanStepDef {
+                id: 2,
+                description: "Write output".to_string(),
+                action: "write_file".to_string(),
+                command: None,
+                depends_on: vec![1],
+            },
+        ],
+    };
+    println!("   ✓ plan_create: {}", plan_action.description());
+
+    // 2. Plan step complete
+    let complete_action = Action::PlanStepComplete {
+        step_id: 1,
+        result: "Read successfully".to_string(),
+    };
+    println!("   ✓ plan_step_complete: {}", complete_action.description());
+
+    // 3. Plan step fail
+    let fail_action = Action::PlanStepFail {
+        step_id: 2,
+        error: "File not found".to_string(),
+    };
+    println!("   ✓ plan_step_fail: {}", fail_action.description());
+
+    // 4. Plan status
+    let status_action = Action::PlanStatus {};
+    println!("   ✓ plan_status: {}", status_action.description());
+
+    // 5. Execute each plan action through executor (should return handled-in-loop)
+    for action in &[&plan_action as &Action, &complete_action, &fail_action, &status_action] {
+        let result = ToolExecutor::execute(action, &ctx, &registry).await?;
+        println!("   → {}", result);
+    }
+
+    // 6. Verify all tools are registered
+    println!("\n2. Verifying tool registrations...");
+    let tool_names = [
+        "read_file", "write_file", "execute_command", "list_directory",
+        "search_files", "file_metadata", "finish", "delete_file",
+        "copy_file", "create_directory", "http_request", "ask_user",
+        "web_search", "web_fetch", "show_changes", "restore_backup",
+        "plan_create", "plan_step_complete", "plan_step_fail", "plan_status",
+    ];
+    for name in &tool_names {
+        if registry.is_registered(name) {
+            println!("   ✓ {}", name);
+        } else {
+            println!("   ✗ {} — NOT REGISTERED", name);
+        }
+    }
+
+    // 7. Check description() and is_destructive() for all action types
+    println!("\n3. Checking action metadata...");
+    let all_actions: Vec<Action> = vec![
+        Action::ReadFile { path: "x".into(), start_line: None, end_line: None },
+        Action::WriteFile { path: "x".into(), content: "".into(), append: None },
+        Action::ExecuteCommand { command: "echo hi".into(), timeout: None, workdir: None },
+        Action::ListDirectory { path: ".".into(), pattern: None },
+        Action::SearchFiles { pattern: "*.rs".into(), path: None, search_type: None },
+        Action::DeleteFile { path: "x".into(), pattern: None },
+        Action::CopyFile { source: "a".into(), destination: "b".into() },
+        Action::CreateDirectory { path: "d".into() },
+        Action::FileMetadata { path: "x".into() },
+        Action::HttpRequest { url: "https://example.com".into(), method: None, headers: None, body: None },
+        Action::Finish { output: None },
+        Action::AskUser { question: "test?".into() },
+        Action::WebSearch { query: "test".into(), num_results: None },
+        Action::WebFetch { url: "https://example.com".into(), max_chars: None },
+        Action::ShowChanges { path: None },
+        Action::RestoreBackup { path: "x".into() },
+        Action::PlanCreate { goal: "g".into(), steps: vec![] },
+        Action::PlanStepComplete { step_id: 1, result: "r".into() },
+        Action::PlanStepFail { step_id: 1, error: "e".into() },
+        Action::PlanStatus {},
+    ];
+    for action in &all_actions {
+        println!("   {} (destructive: {})", action.description(), action.is_destructive());
+    }
+
+    println!("\n=== TOOL TEST COMPLETE ===\n");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

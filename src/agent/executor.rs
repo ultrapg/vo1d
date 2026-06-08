@@ -86,6 +86,10 @@ impl ToolExecutor {
                 let expanded = ctx.paths.resolve_workspace_path(path);
                 crate::tools::changes::Changes::restore(&expanded.to_string_lossy())
             }
+            Action::PlanCreate { .. } => Ok("Plan created (handled in loop)".to_string()),
+            Action::PlanStepComplete { .. } => Ok("Step completed (handled in loop)".to_string()),
+            Action::PlanStepFail { .. } => Ok("Step failed (handled in loop)".to_string()),
+            Action::PlanStatus { .. } => Ok("Plan status (handled in loop)".to_string()),
         }
     }
 }

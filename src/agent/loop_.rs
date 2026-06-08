@@ -8,7 +8,7 @@ use crate::core::self_correction::{ErrorClassifier, FailureTracker};
 use crate::AppContext;
 use crate::models::action::Action;
 use crate::models::message::Message;
-use crate::models::plan::{Plan, StepStatus};
+use crate::models::plan::{Plan, PlanStep, StepStatus};
 use crate::security::policy::PolicyResult;
 use crate::tools::registry::ToolRegistry;
 use anyhow::{Context, Result};
@@ -256,23 +256,22 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         let mut response_text = String::new();
-        let mut stream = llm.stream_chat(&conversation).await
-            .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
+        {
+            let mut stream = llm.stream_chat(&conversation).await
+                .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
 
-        while let Some(chunk) = stream.next().await {
-            match chunk {
-                Ok(token) => {
-                    if !session.tui_mode {
-                        print!("{}", token);
-                        std::io::Write::flush(&mut std::io::stdout())?;
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(token) => response_text.push_str(&token),
+                    Err(e) => {
+                        anyhow::bail!("Generation error: {}", e);
                     }
-                    response_text.push_str(&token);
-                }
-                Err(e) => {
-                    anyhow::bail!("Generation error: {}", e);
                 }
             }
         }
+
+        // Strip <think> tags before any further processing
+        response_text = strip_think_tags(&response_text);
 
         // Parse action from response
         let action = match tool_parser.parse(&response_text, supports_native_tools) {
@@ -283,6 +282,16 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 Action::Finish { output: Some(response_text.clone()) }
             }
         };
+
+        // --- Clean display of reasoning + action ---
+        if !session.tui_mode {
+            let reasoning = extract_reasoning(&response_text);
+            let clean = clean_reasoning(&reasoning);
+            if !clean.is_empty() {
+                eprintln!("{}", clean);
+            }
+            eprintln!("── {}", action.description());
+        }
 
         // Check for conversational response (no tool intent)
         if is_conversational(&response_text) {
@@ -301,24 +310,16 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             }
         }
 
-        // Extract reasoning for display
+        // Extract hypothesis from reasoning for Fix mode
         let reasoning = extract_reasoning(&response_text);
-        let clean_reasoning = clean_reasoning(&reasoning);
-        if !clean_reasoning.is_empty() {
-            if !session.tui_mode {
-                println!("\n[REASONING]\n{}\n", clean_reasoning);
-            }
-            // Extract hypothesis from reasoning for Fix mode
-            if behavior == crate::core::behavior::BehaviorMode::Fix {
-                if reasoning.len() > 20 {
-                    let hyp = reasoning.chars().take(300).collect::<String>();
-                    fix_hypothesis = Some(hyp);
-                }
-            }
-        } else if iteration > 0 {
+        if strip_think_tags(&reasoning).trim().is_empty() && iteration > 0 {
             conversation.push(Message::system(
                 "REMINDER: You MUST explain your reasoning in natural language before each JSON action. Start with 'I need to...' or 'The previous result shows...' and explain what you'll do next."
             ));
+        }
+        if behavior == crate::core::behavior::BehaviorMode::Fix && reasoning.len() > 20 {
+            let hyp = reasoning.chars().take(300).collect::<String>();
+            fix_hypothesis = Some(hyp);
         }
 
         // Check for multiple actions in one response
@@ -483,6 +484,18 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     conversation.push(Message::system(guidance));
                 }
             }
+        }
+
+        // --- Plan action handling (before executor) ---
+        if matches!(&action, Action::PlanCreate { .. } | Action::PlanStepComplete { .. } | Action::PlanStepFail { .. } | Action::PlanStatus { .. }) {
+            let result_text = handle_plan_action(
+                &action, &mut plan, &mut current_step,
+                &mut step_iterations, &mut step_failures, &mut plan_recovery_fired,
+            );
+            conversation.push(Message::tool(result_text.clone(), format!("plan_{}", iteration)));
+            session.variables.insert("last_action".to_string(), action_type.to_string());
+            session.variables.insert("last_result".to_string(), result_text);
+            continue;
         }
 
         // Execute the action
@@ -761,8 +774,13 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     Ok(session)
 }
 
+fn strip_think_tags(text: &str) -> String {
+    let re = Regex::new(r"(?s)<think>.*?</think>").unwrap();
+    re.replace_all(text, "").to_string()
+}
+
 fn clean_reasoning(text: &str) -> String {
-    let mut s = text.to_string();
+    let mut s = strip_think_tags(text);
     for label in &["STEP 1 — REASON", "STEP 2 — ACTION", "STEP 1 —", "STEP 2 —"] {
         s = s.replace(label, "");
     }
@@ -791,6 +809,10 @@ fn action_type_name(action: &Action) -> &'static str {
         Action::WebFetch { .. } => "web_fetch",
         Action::ShowChanges { .. } => "show_changes",
         Action::RestoreBackup { .. } => "restore_backup",
+        Action::PlanCreate { .. } => "plan_create",
+        Action::PlanStepComplete { .. } => "plan_step_complete",
+        Action::PlanStepFail { .. } => "plan_step_fail",
+        Action::PlanStatus {} => "plan_status",
     }
 }
 
@@ -871,11 +893,19 @@ Only use actions when the user asks you to perform a task (read/write files, run
 
     let planning_note = r#"
 PLANNING WORKFLOW (for complex tasks):
-1. First create a PLAN.md file describing the steps you will take
-2. Execute each step one at a time
-3. Update PLAN.md with progress as you go (mark steps [x] when done)
-4. Check your work between steps
-5. Call finish when all steps are complete"#;
+Instead of manually editing a PLAN.md file, use the built-in plan tools:
+
+- plan_create:    Create a plan with ordered steps
+  JSON: {"action": "plan_create", "goal": "Fix bugs", "steps": [{"id": 1, "description": "Read source", "action": "read_file"}, {"id": 2, "description": "Fix code", "action": "write_file", "depends_on": [1]}]}
+- plan_step_complete: Mark a step as done
+  JSON: {"action": "plan_step_complete", "step_id": 1, "result": "Read the file"}
+- plan_step_fail: Mark a step as failed
+  JSON: {"action": "plan_step_fail", "step_id": 1, "error": "File not found"}
+- plan_status:     Check current plan progress
+  JSON: {"action": "plan_status"}
+
+The agent loop will automatically advance to the next ready step when a step completes.
+Steps can declare dependencies with 'depends_on' (list of step IDs)."#;
 
     let tool_instructions = r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
 
@@ -1058,4 +1088,97 @@ fn is_conversational(text: &str) -> bool {
 fn has_multiple_json_objects(text: &str) -> bool {
     let count = text.matches(r#"{"action""#).count();
     count > 1
+}
+
+/// Handle plan-related actions dispatched directly in the loop.
+/// Returns a result string to be added to conversation.
+fn handle_plan_action(
+    action: &Action,
+    plan: &mut Option<Plan>,
+    current_step: &mut usize,
+    step_iterations: &mut HashMap<u32, u32>,
+    step_failures: &mut HashMap<u32, u32>,
+    plan_recovery_fired: &mut bool,
+) -> String {
+    match action {
+        Action::PlanCreate { goal, steps } => {
+            let plan_steps: Vec<PlanStep> = steps.iter().map(|s| s.to_step()).collect();
+            let total = plan_steps.len();
+            let new_plan = Planner::new(100).create_plan(goal, plan_steps);
+            *plan = Some(new_plan);
+            if let Some(ref p) = *plan {
+                *current_step = Planner::next_ready_step(p).unwrap_or(0);
+            }
+            step_iterations.clear();
+            step_failures.clear();
+            *plan_recovery_fired = false;
+            format!("Plan created: {}. {} steps total.", goal, total)
+        }
+        Action::PlanStepComplete { step_id, result } => {
+            if let Some(ref mut p) = *plan {
+                // Find step by id
+                if let Some(idx) = p.steps.iter().position(|s| s.id == *step_id) {
+                    Planner::complete_step(p, idx, result.clone());
+                    let next = Planner::next_ready_step(p);
+                    match next {
+                        Some(n) => {
+                            *current_step = n;
+                            step_iterations.insert(n as u32, 0);
+                            step_failures.insert(n as u32, 0);
+                            format!("Step {} completed. Moving to step {}.", step_id, n + 1)
+                        }
+                        None => {
+                            if p.steps.iter().all(|s| s.status == StepStatus::Completed) {
+                                format!("Step {} completed. All plan steps done!", step_id)
+                            } else {
+                                format!("Step {} completed.", step_id)
+                            }
+                        }
+                    }
+                } else {
+                    format!("Step {} not found in plan.", step_id)
+                }
+            } else {
+                "No active plan.".to_string()
+            }
+        }
+        Action::PlanStepFail { step_id, error } => {
+            if let Some(ref mut p) = *plan {
+                if let Some(idx) = p.steps.iter().position(|s| s.id == *step_id) {
+                    Planner::fail_step(p, idx, error.clone());
+                    let next = Planner::next_ready_step(p);
+                    match next {
+                        Some(n) => {
+                            *current_step = n;
+                            step_iterations.insert(n as u32, 0);
+                            step_failures.insert(n as u32, 0);
+                            format!("Step {} failed: {}. Moving to step {}.", step_id, error, n + 1)
+                        }
+                        None => {
+                            format!("Step {} failed: {}", step_id, error)
+                        }
+                    }
+                } else {
+                    format!("Step {} not found in plan.", step_id)
+                }
+            } else {
+                "No active plan.".to_string()
+            }
+        }
+        Action::PlanStatus {} => {
+            if let Some(ref p) = *plan {
+                let done = p.steps.iter().filter(|s| s.status == StepStatus::Completed).count();
+                let failed = p.steps.iter().filter(|s| s.status == StepStatus::Failed).count();
+                let pending = p.steps.len() - done - failed;
+                let current_desc = p.steps.get(*current_step).map(|s| s.description.as_str()).unwrap_or("(none)");
+                format!(
+                    "Goal: {} | Steps: {}/{} done, {} pending, {} failed | Current: step {} ({})",
+                    p.goal, done, p.steps.len(), pending, failed, *current_step + 1, current_desc
+                )
+            } else {
+                "No active plan.".to_string()
+            }
+        }
+        _ => unreachable!(),
+    }
 }

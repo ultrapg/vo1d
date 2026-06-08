@@ -37,7 +37,7 @@ impl Default for CompressionConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            target_usage: 0.70,
+            target_usage: 0.20,
             min_recent_messages: 8,
             max_tool_output_chars: 2000,
         }

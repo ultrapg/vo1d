@@ -1,5 +1,34 @@
+use crate::models::plan::{PlanStep, StepStatus};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+/// A step definition for plan_create action.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanStepDef {
+    pub id: u32,
+    pub description: String,
+    pub action: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default)]
+    pub depends_on: Vec<u32>,
+}
+
+impl PlanStepDef {
+    pub fn to_step(&self) -> PlanStep {
+        PlanStep {
+            id: self.id,
+            description: self.description.clone(),
+            action: self.action.clone(),
+            command: self.command.clone(),
+            depends_on: self.depends_on.clone(),
+            status: StepStatus::Pending,
+            result: None,
+            error: None,
+            retry_count: 0,
+        }
+    }
+}
 
 /// Represents an action the agent can take.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +131,23 @@ pub enum Action {
     RestoreBackup {
         path: String,
     },
+    #[serde(rename = "plan_create")]
+    PlanCreate {
+        goal: String,
+        steps: Vec<PlanStepDef>,
+    },
+    #[serde(rename = "plan_step_complete")]
+    PlanStepComplete {
+        step_id: u32,
+        result: String,
+    },
+    #[serde(rename = "plan_step_fail")]
+    PlanStepFail {
+        step_id: u32,
+        error: String,
+    },
+    #[serde(rename = "plan_status")]
+    PlanStatus {},
 }
 
 fn default_dot() -> String {
@@ -134,6 +180,10 @@ impl Action {
             Action::WebFetch { url, .. } => format!("Web fetch: {}", url),
             Action::ShowChanges { .. } => "Show changes".to_string(),
             Action::RestoreBackup { path } => format!("Restore backup: {}", path),
+            Action::PlanCreate { goal, steps } => format!("Create plan: {} ({} steps)", goal, steps.len()),
+            Action::PlanStepComplete { step_id, .. } => format!("Complete plan step {}", step_id),
+            Action::PlanStepFail { step_id, .. } => format!("Fail plan step {}", step_id),
+            Action::PlanStatus {} => "Plan status".to_string(),
         }
     }
 

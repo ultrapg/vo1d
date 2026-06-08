@@ -70,6 +70,8 @@ enum SecurityModeArg {
 enum TestAction {
     /// Test context compression by filling the context window then triggering compression
     Compression,
+    /// Test all tool types (plan tools, file ops, etc.)
+    Tools,
 }
 
 #[derive(Subcommand)]
@@ -251,6 +253,9 @@ async fn main() -> Result<()> {
             match action {
                 Some(TestAction::Compression) | None => {
                     vo1d::agent::train::run_test_compression(ctx).await?;
+                }
+                Some(TestAction::Tools) => {
+                    vo1d::agent::train::run_test_tools(ctx).await?;
                 }
             }
         }
