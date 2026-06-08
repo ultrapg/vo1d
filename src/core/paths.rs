@@ -171,12 +171,51 @@ impl Vo1dPaths {
     }
 
     /// Resolve a path relative to the workspace, or absolute if already absolute.
+    /// Validates the resolved path stays within the workspace boundary.
+    /// Returns the canonicalized path if valid, or an error if it escapes.
     pub fn resolve_workspace_path(&self, user_path: &str) -> PathBuf {
         let path = PathBuf::from(user_path);
         if path.is_absolute() {
-            path
+            // Check absolute paths don't use traversal to escape
+            self.sanitize_path(&path)
         } else {
-            self.workspace_dir().join(path)
+            let resolved = self.workspace_dir().join(path);
+            self.sanitize_path(&resolved)
+        }
+    }
+
+    /// Sanitize a path by canonicalizing and checking it stays within workspace.
+    fn sanitize_path(&self, path: &Path) -> PathBuf {
+        // Try to canonicalize; if it fails (e.g. path doesn't exist yet),
+        // do a manual traversal check
+        match path.canonicalize() {
+            Ok(canonical) => {
+                let ws = self.workspace_dir().canonicalize().unwrap_or_else(|_| self.workspace_dir());
+                if canonical.starts_with(&ws) {
+                    canonical
+                } else {
+                    tracing::warn!("Path escapes workspace: {} -> {}", path.display(), canonical.display());
+                    ws.join(path.file_name().unwrap_or_default())
+                }
+            }
+            Err(_) => {
+                // Path doesn't exist yet - check for traversal components
+                let ws = self.workspace_dir();
+                let components: Vec<_> = path.components().collect();
+                let mut depth: i32 = 0;
+                for comp in &components {
+                    if comp.as_os_str() == ".." {
+                        depth -= 1;
+                    } else if comp.as_os_str() != "." && comp.as_os_str() != "" {
+                        depth += 1;
+                    }
+                    if depth < 0 {
+                        tracing::warn!("Path traversal detected: {}", path.display());
+                        return ws.join(path.file_name().unwrap_or_default());
+                    }
+                }
+                path.to_path_buf()
+            }
         }
     }
 

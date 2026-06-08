@@ -66,22 +66,43 @@ impl BuiltinBackend {
         #[cfg(feature = "llamacpp-builtin")]
         {
             tracing::info!(
-                "Loading model: {} ({} GPU layers, {} CPU threads)",
+                "Loading model: {} (requested GPU layers: {}, {} CPU threads)",
                 self.model_path.display(),
                 self.config.gpu_layers,
                 self.config.threads,
             );
 
             let path = self.model_path.clone();
-            let gpu_layers = self.config.gpu_layers;
+            let requested_layers = self.config.gpu_layers;
 
             let handle = tokio::task::spawn_blocking(move || -> Result<LlamaModelHandle> {
                 let backend =
                     LlamaBackend::init().map_err(|e| anyhow::anyhow!("Backend init: {:?}", e))?;
 
+                let gpu_available = backend.supports_gpu_offload();
+
+                let effective_layers = if gpu_available {
+                    if requested_layers > 0 {
+                        requested_layers
+                    } else {
+                        -1 // all layers
+                    }
+                } else if requested_layers != 0 {
+                    tracing::warn!(
+                        "GPU offload requested ({}) but not available at runtime. Falling back to CPU.",
+                        requested_layers
+                    );
+                    0
+                } else {
+                    0
+                };
+
                 let mut model_params = LlamaModelParams::default();
-                if gpu_layers > 0 {
-                    model_params = model_params.with_n_gpu_layers(gpu_layers as u32);
+                match effective_layers {
+                    -1 => {} // all layers, leave C default
+                    0 => { model_params = model_params.with_n_gpu_layers(0); }
+                    n if n > 0 => { model_params = model_params.with_n_gpu_layers(n as u32); }
+                    _ => {}
                 }
 
                 let model = LlamaModel::load_from_file(&backend, &path, &model_params)

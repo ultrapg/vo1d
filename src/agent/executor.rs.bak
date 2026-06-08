@@ -4,7 +4,7 @@ use crate::AppContext;
 use crate::tools::files::FileOps;
 use crate::tools::shell::ShellExec;
 use crate::tools::registry::ToolRegistry;
-use anyhow::{Result};
+use anyhow::{Context, Result};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ impl ToolExecutor {
         ctx: &'a AppContext,
         registry: &'a Arc<ToolRegistry>,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
-        Box::pin(Self::execute_inner(action, ctx, registry, 0))
+        Self::execute_with_depth(action, ctx, registry, 0)
     }
 
     /// Execute with explicit recursion depth tracking.
@@ -32,16 +32,8 @@ impl ToolExecutor {
         ctx: &'a AppContext,
         registry: &'a Arc<ToolRegistry>,
         depth: usize,
-    ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
-        Box::pin(Self::execute_inner(action, ctx, registry, depth))
-    }
-
-    async fn execute_inner<'a>(
-        action: &'a Action,
-        ctx: &'a AppContext,
-        registry: &'a Arc<ToolRegistry>,
-        depth: usize,
-    ) -> Result<String> {
+    ) -> Pin<Box<dyn Future<Output = Result<String> > + Send + 'a> > {
+        Box::pin(async move {
         let result: Result<String> = match action {
             Action::ReadFile { path, start_line, end_line } => {
                 let expanded = ctx.paths.resolve_workspace_path(path);
@@ -185,14 +177,15 @@ impl ToolExecutor {
                     Ok(format!("Skill '{}' not found.", name))
                 }
             }
+        }
         };
-        Ok(result.map(|content| {
+        result.map(|content| {
             if content.len() > MAX_OUTPUT_SIZE {
                 format!("{}...\n[Output truncated: {} total chars, max is {}]",
                     &content[..MAX_OUTPUT_SIZE], content.len(), MAX_OUTPUT_SIZE)
             } else {
                 content
             }
-        })?)
+        })
     }
 }

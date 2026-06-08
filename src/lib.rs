@@ -28,8 +28,8 @@ pub struct AppContext {
     pub security: security::SecurityManager,
     pub audit: security::audit::AuditLogger,
     pub model_registry: llm::registry::ModelRegistry,
-    pub memory: std::sync::Arc<std::sync::Mutex<core::memory::MemoryStore>>,
-    pub skill_registry: std::sync::Arc<std::sync::Mutex<tools::skills::SkillRegistry>>,
+    pub memory: std::sync::Arc<tokio::sync::Mutex<core::memory::MemoryStore>>,
+    pub skill_registry: std::sync::Arc<tokio::sync::Mutex<tools::skills::SkillRegistry>>,
     /// Auto-approve all actions (--yes flag)
     pub auto_approve: bool,
 }
@@ -44,11 +44,11 @@ impl AppContext {
         let audit = security::audit::AuditLogger::new(&paths)?;
         let security = security::SecurityManager::new(&config, &audit)?;
         let model_registry = llm::registry::ModelRegistry::new(&paths, &config)?;
-        let memory = std::sync::Arc::new(std::sync::Mutex::new(
+        let memory = std::sync::Arc::new(tokio::sync::Mutex::new(
             core::memory::MemoryStore::new(&paths.memory_dir())?
         ));
 
-        let skill_registry = std::sync::Arc::new(std::sync::Mutex::new(
+        let skill_registry = std::sync::Arc::new(tokio::sync::Mutex::new(
             tools::skills::SkillRegistry::load(&paths)?
         ));
 

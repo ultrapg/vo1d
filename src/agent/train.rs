@@ -139,7 +139,7 @@ async fn run_all_tasks(ctx: AppContext, curriculum: &Curriculum, sandbox: &Path)
 
         let result = run_single_task(&ctx, task, sandbox).await?;
 
-        store_in_memory(&ctx, task, &result);
+        store_in_memory(&ctx, task, &result).await;
 
         if result.passed {
             println!("  ✓ PASSED");
@@ -218,10 +218,7 @@ async fn run_single_task(ctx: &AppContext, task: &crate::core::curriculum::TaskD
     }
 
     // Pull relevant past experiences into the prompt
-    let memory_recall = match ctx.memory.lock() {
-        Ok(mem) => mem.to_context_string_with_recall(&task.description),
-        Err(_) => String::new(),
-    };
+    let memory_recall = ctx.memory.lock().await.to_context_string_with_recall(&task.description);
 
     let setup_note = if task.setup.is_some() {
         "\nThe sandbox has been pre-configured with a test environment. Inspect it first before making changes."
@@ -276,23 +273,52 @@ NOTE: write_file automatically creates parent directories — no need to use cre
         actions_taken.clone()
     };
 
-    if let Ok(mut mem) = ctx.memory.lock() {
-        mem.add_task(
-            &format!("train:{}", task.id),
-            action_summary,
-            &format!("{} ({:?})", evaluation.outcome, elapsed),
-        );
-    }
+    let mut mem = ctx.memory.lock().await;
+    mem.add_task(
+        &format!("train:{}", task.id),
+        action_summary,
+        &format!("{} ({:?})", evaluation.outcome, elapsed),
+    );
 
     Ok(evaluation)
 }
 
+/// Allowed command prefixes for curriculum setup (whitelist approach).
+const ALLOWED_SETUP_PREFIXES: &[&str] = &[
+    "echo", "mkdir", "rmdir", "del", "copy", "move", "ren", "type",
+    "cd", "dir", "set", "if", "for", "attrib", "xcopy", "robocopy",
+    "chcp", "ver", "whoami", "date", "time",
+    "git init", "git config", "git add", "git commit",
+    "cargo init", "npm init",
+    "python", "node",
+    "powershell -Command \"New-Item", "powershell -Command \"Set-Content",
+    "powershell -Command \"Add-Content", "powershell -Command \"Remove-Item",
+    "powershell -Command \"Copy-Item", "powershell -Command \"Move-Item",
+    "powershell -Command \"Get-Content",
+    "touch", "cat", "tee", "printf", "cp", "mv", "rm -f",
+    "test", "[", "ln",
+];
+
 /// Run setup commands for a task (creates testing environment).
+/// Validates each command against a whitelist before execution.
 fn execute_setup(task: &crate::core::curriculum::TaskDefinition, sandbox: &Path) -> Result<()> {
     if let Some(ref setup_cmds) = task.setup {
         let shell = if cfg!(windows) { "cmd.exe" } else { "sh" };
         let arg = if cfg!(windows) { "/C" } else { "-c" };
         for cmd in setup_cmds {
+            // Validate command against whitelist
+            let cmd_trimmed = cmd.trim();
+            let is_allowed = ALLOWED_SETUP_PREFIXES.iter().any(|prefix| {
+                cmd_trimmed.to_lowercase().starts_with(&prefix.to_lowercase())
+            });
+            if !is_allowed && !cmd_trimmed.starts_with('#') && !cmd_trimmed.is_empty() {
+                anyhow::bail!(
+                    "Setup command '{}' is not in the allowed whitelist. \
+                     Only safe file/shell operations are permitted in curriculum setup.",
+                    cmd_trimmed
+                );
+            }
+
             let output = std::process::Command::new(shell)
                 .args(&[arg, cmd])
                 .current_dir(sandbox)
@@ -306,9 +332,9 @@ fn execute_setup(task: &crate::core::curriculum::TaskDefinition, sandbox: &Path)
     Ok(())
 }
 
-fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, result: &EvaluationResult) {
-    if let Ok(mut mem) = ctx.memory.lock() {
-        if result.passed {
+async fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinition, result: &EvaluationResult) {
+    let mut mem = ctx.memory.lock().await;
+    if result.passed {
             let solution = format!("Used correct approach for '{}' and achieved: {}",
                 task.description, task.expected_outcome);
             mem.add_solution(&task.description, &solution, &result.outcome, &[]);
@@ -335,7 +361,6 @@ fn store_in_memory(ctx: &AppContext, task: &crate::core::curriculum::TaskDefinit
                 &[],
             );
         }
-    }
 }
 
 fn print_summary(curriculum: &Curriculum, results: &[EvaluationResult]) {

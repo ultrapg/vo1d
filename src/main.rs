@@ -165,17 +165,17 @@ enum ModelAction {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize tracing
+    // Initialize tracing (use try_init to avoid panics if already initialized)
     if cli.debug {
-        tracing_subscriber::fmt()
+        let _ = tracing_subscriber::fmt()
             .with_env_filter("vo1d=debug")
             .with_target(true)
-            .init();
+            .try_init();
     } else {
-        tracing_subscriber::fmt()
+        let _ = tracing_subscriber::fmt()
             .with_env_filter("vo1d=info")
             .with_target(false)
-            .init();
+            .try_init();
     }
 
     // Resolve security mode
@@ -220,6 +220,7 @@ async fn main() -> Result<()> {
     if let Some(ws) = cli.workspace {
         std::fs::create_dir_all(&ws)
             .with_context(|| format!("Failed to create workspace directory: {}", ws.display()))?;
+        ctx.paths = ctx.paths.with_workspace_override(ws);
     }
 
     // Handle commands
@@ -387,32 +388,35 @@ async fn list_curricula(ctx: AppContext) -> Result<()> {
 }
 
 fn find_curriculum_dir(ctx: &AppContext) -> Option<std::path::PathBuf> {
-    let candidates: Vec<std::path::PathBuf> = {
-        let mut v = Vec::new();
-        // 1. Exe-relative curriculum dir
-        v.push(ctx.paths.curriculum_dir());
-        // 2. Current working directory
-        if let Ok(cwd) = std::env::current_dir() {
-            v.push(cwd.join("curriculum"));
-        }
-        // 3. Parent of exe dir (common when running from target/release)
-        if let Some(p) = ctx.paths.curriculum_dir().parent().and_then(|p| p.parent()) {
-            v.push(p.join("curriculum"));
-        }
-        v
-    };
+    let mut candidates = Vec::new();
+    // 1. Exe-relative curriculum dir
+    candidates.push(ctx.paths.curriculum_dir());
+    // 2. Current working directory
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join("curriculum"));
+    }
+    // 3. Parent of exe dir (common when running from target/release)
+    if let Some(p) = ctx.paths.curriculum_dir().parent().and_then(|p| p.parent()) {
+        candidates.push(p.join("curriculum"));
+    }
 
     for dir in &candidates {
-        if dir.exists() {
-            // Only return if it has .json files
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                let has_json = entries.flatten().any(|e| {
-                    e.path().extension().map(|x| x == "json").unwrap_or(false)
-                });
-                if has_json {
-                    return Some(dir.clone());
+        match dir.try_exists() {
+            Ok(true) => {
+                // Only return if it has .json files
+                match std::fs::read_dir(dir) {
+                    Ok(entries) => {
+                        let has_json = entries
+                            .filter_map(|e| e.ok())
+                            .any(|e| e.path().extension().map_or(false, |x| x == "json"));
+                        if has_json {
+                            return Some(dir.clone());
+                        }
+                    }
+                    Err(_) => continue,
                 }
             }
+            _ => continue,
         }
     }
     None
@@ -425,7 +429,7 @@ async fn run_train(ctx: AppContext, curriculum: &str, manual: bool) -> Result<()
 async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()> {
     match action {
         Some(MemoryAction::List) | None => {
-            let mem = ctx.memory.lock().unwrap();
+            let mem = ctx.memory.lock().await;
             let s = mem.stats();
             println!("=== VO1D MEMORY ===\n{}\n", s);
 
@@ -464,7 +468,7 @@ async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()>
             println!();
         }
         Some(MemoryAction::Show { id }) => {
-            let mem = ctx.memory.lock().unwrap();
+            let mem = ctx.memory.lock().await;
             if let Some(sol) = mem.solutions.iter().find(|s| s.id == id) {
                 println!("=== Solution: {} ===", sol.id);
                 println!("Task: {}", sol.task_description);
@@ -491,7 +495,7 @@ async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()>
             }
         }
         Some(MemoryAction::Delete { id }) => {
-            let mut mem = ctx.memory.lock().unwrap();
+            let mut mem = ctx.memory.lock().await;
             if mem.delete(&id) {
                 println!("✓ Deleted memory: {}", id);
             } else {
@@ -500,7 +504,7 @@ async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()>
         }
         Some(MemoryAction::Clear { memory_type }) => {
             let mem_type = if memory_type == "all" { None } else { Some(memory_type.as_str()) };
-            let mut mem = ctx.memory.lock().unwrap();
+            let mut mem = ctx.memory.lock().await;
             mem.clear(mem_type);
             println!("✓ Cleared memories ({})", memory_type);
         }
@@ -510,7 +514,7 @@ async fn run_memory(ctx: AppContext, action: Option<MemoryAction>) -> Result<()>
             } else {
                 tags.split(',').map(|t| t.trim().to_string()).collect()
             };
-            let mut mem = ctx.memory.lock().unwrap();
+            let mut mem = ctx.memory.lock().await;
             let id = mem.add_note(&content, tag_list);
             println!("✓ Added note: {}", id);
         }
@@ -525,7 +529,7 @@ async fn run_sessions(_ctx: AppContext) -> Result<()> {
 
 async fn run_config(ctx: AppContext) -> Result<()> {
     let config_path = ctx.paths.config_dir().join("settings.toml");
-    let content = std::fs::read_to_string(&config_path)
+    let content = tokio::fs::read_to_string(&config_path).await
         .with_context(|| format!("Failed to read config: {}", config_path.display()))?;
     println!("{}", content);
     Ok(())

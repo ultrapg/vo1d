@@ -110,6 +110,8 @@ impl MemoryStore {
         }
     }
 
+    const MAX_TOTAL_BYTES: u64 = 50 * 1024 * 1024; // 50MB total memory limit
+
     pub fn save(&self) -> Result<()> {
         Self::save_json(&self.path.join("task_history.json"), &self.task_history)?;
         Self::save_json(&self.path.join("preferences.json"), &self.preferences)?;
@@ -117,6 +119,34 @@ impl MemoryStore {
         Self::save_json(&self.path.join("solutions.json"), &self.solutions)?;
         Self::save_json(&self.path.join("mistakes.json"), &self.mistakes)?;
         Self::save_json(&self.path.join("notes.json"), &self.notes)?;
+        self.check_total_size()?;
+        Ok(())
+    }
+
+    /// Check that total memory directory size stays under the limit.
+    fn check_total_size(&self) -> Result<()> {
+        let mut total: u64 = 0;
+        let files = [
+            "task_history.json",
+            "preferences.json",
+            "patterns.json",
+            "solutions.json",
+            "mistakes.json",
+            "notes.json",
+        ];
+        for fname in &files {
+            let path = self.path.join(fname);
+            if let Ok(meta) = std::fs::metadata(&path) {
+                total += meta.len();
+            }
+        }
+        if total > Self::MAX_TOTAL_BYTES {
+            tracing::warn!(
+                "Memory store exceeds size limit: {:.2} MB / {:.2} MB. Consider clearing old data.",
+                total as f64 / 1_048_576.0,
+                Self::MAX_TOTAL_BYTES as f64 / 1_048_576.0,
+            );
+        }
         Ok(())
     }
 

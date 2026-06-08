@@ -13,6 +13,9 @@ pub enum SessionStatus {
     Cancelled,
 }
 
+/// Current session format version. Increment on breaking changes.
+const SESSION_VERSION: u32 = 1;
+
 /// A session stores all state for a task execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
@@ -27,6 +30,8 @@ pub struct Session {
     pub final_output: Option<String>,
     #[serde(skip)]
     pub tui_mode: bool,
+    #[serde(default)]
+    pub version: u32,
 }
 
 impl Session {
@@ -45,6 +50,7 @@ impl Session {
             status: SessionStatus::Active,
             final_output: None,
             tui_mode: false,
+            version: SESSION_VERSION,
         };
 
         // Create session directory
@@ -58,28 +64,47 @@ impl Session {
 }
 
 /// Save session metadata to disk.
-pub fn save_session_metadata(ctx: &AppContext, session: &Session) -> Result<()> {
+pub async fn save_session_metadata(ctx: &AppContext, session: &Session) -> Result<()> {
     let metadata_path = ctx.paths.session_dir(&session.session_id).join("metadata.toml");
     let toml_str = toml::to_string_pretty(&session)
         .context("Failed to serialize session metadata")?;
-    std::fs::write(&metadata_path, &toml_str)
+    tokio::fs::write(&metadata_path, &toml_str).await
         .with_context(|| format!("Failed to write session metadata: {}", metadata_path.display()))?;
     Ok(())
 }
 
-/// Load session metadata from disk.
-pub fn load_session_metadata(ctx: &AppContext, session_id: &str) -> Result<Session> {
+/// Load session metadata from disk, with version migration.
+pub async fn load_session_metadata(ctx: &AppContext, session_id: &str) -> Result<Session> {
     let metadata_path = ctx.paths.session_dir(session_id).join("metadata.toml");
-    let content = std::fs::read_to_string(&metadata_path)
+    let content = tokio::fs::read_to_string(&metadata_path).await
         .with_context(|| format!("Failed to read session metadata: {}", metadata_path.display()))?;
-    let session: Session = toml::from_str(&content)
+    let mut session: Session = toml::from_str(&content)
         .with_context(|| format!("Failed to parse session metadata: {}", metadata_path.display()))?;
+
+    // Version migration
+    match session.version {
+        0 => {
+            // v0 -> v1: no structural changes yet, just bump version
+            session.version = 1;
+            // Re-save with updated version
+            save_session_metadata(ctx, &session).await?;
+        }
+        SESSION_VERSION => {} // current, no migration needed
+        v if v > SESSION_VERSION => {
+            tracing::warn!(
+                "Session '{}' has version {} which exceeds current version {}. Some data may be incompatible.",
+                session_id, v, SESSION_VERSION
+            );
+        }
+        _ => unreachable!(),
+    }
+
     Ok(session)
 }
 
 /// Resume a session from saved state.
 pub async fn resume_session(ctx: AppContext, session_id: &str) -> Result<()> {
-    let session = load_session_metadata(&ctx, session_id)?;
+    let session = load_session_metadata(&ctx, session_id).await?;
     info!("Resuming session: {} (status: {:?})", session_id, session.status);
 
     if session.status == SessionStatus::Completed {

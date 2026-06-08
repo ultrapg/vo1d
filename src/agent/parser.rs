@@ -4,11 +4,16 @@ use regex::Regex;
 use tracing::warn;
 
 /// Multi-phase tool parser for extracting structured actions from LLM output.
-pub struct ToolParser;
+pub struct ToolParser {
+    json_block_re: Regex,
+}
 
 impl ToolParser {
     pub fn new() -> Self {
-        Self
+        Self {
+            json_block_re: Regex::new(r"```(?:json)?\s*([\s\S]*?)```")
+                .expect("Failed to compile JSON block regex"),
+        }
     }
 
     /// Parse an action from model response text.
@@ -22,7 +27,6 @@ impl ToolParser {
 
     /// Parse native tool calls (from tool-capable models).
     fn parse_native(&self, text: &str) -> Result<Action> {
-        // Tool-native models return tool_calls separately; here we parse the text
         self.parse_simulated(text)
     }
 
@@ -34,14 +38,13 @@ impl ToolParser {
         }
 
         // Phase 2: Extract from markdown code block
-        let re = Regex::new(r"```(?:json)?\s*([\s\S]*?)```")?;
-        if let Some(caps) = re.captures(text) {
+        if let Some(caps) = self.json_block_re.captures(text) {
             let extracted = caps.get(1).unwrap().as_str().trim();
             if let Ok(action) = serde_json::from_str::<Action>(extracted) {
                 return Ok(action);
             }
-            // Try with escaped quotes
-            let cleaned = extracted.replace('\"', "\"").replace('\'', "\"");
+            // Try with smart quote cleaning
+            let cleaned = clean_smart_quotes(extracted);
             if let Ok(action) = serde_json::from_str::<Action>(&cleaned) {
                 return Ok(action);
             }
@@ -89,8 +92,8 @@ impl ToolParser {
                             if let Ok(action) = serde_json::from_str::<Action>(candidate) {
                                 return Some(action);
                             }
-                            // Try cleaning quotes
-                            let cleaned = candidate.replace('\"', "\"").replace('\'', "\"");
+                            // Try cleaning smart quotes
+                            let cleaned = clean_smart_quotes(candidate);
                             if let Ok(action) = serde_json::from_str::<Action>(&cleaned) {
                                 return Some(action);
                             }
@@ -218,4 +221,17 @@ impl ToolParser {
         }
         None
     }
+}
+
+/// Clean smart/unicode quotes from text, replacing them with ASCII equivalents.
+fn clean_smart_quotes(text: &str) -> String {
+    text
+        .replace('\u{201C}', "\"")   // Left double smart quote
+        .replace('\u{201D}', "\"")   // Right double smart quote
+        .replace('\u{2018}', "'")    // Left single smart quote
+        .replace('\u{2019}', "'")    // Right single smart quote
+        .replace('\u{201E}', "\"")   // Double low-9 quote
+        .replace('\u{201A}', "'")    // Single low-9 quote
+        .replace('\u{00AB}', "\"")   // Left-pointing double angle
+        .replace('\u{00BB}', "\"")   // Right-pointing double angle
 }

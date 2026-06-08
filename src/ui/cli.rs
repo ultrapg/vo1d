@@ -93,7 +93,7 @@ pub async fn interactive_repl(ctx: AppContext) -> Result<()> {
                 continue;
             }
             "/memory" => {
-                let mem = ctx.memory.lock().unwrap();
+                let mem = ctx.memory.lock().await;
                 let stats = mem.stats();
                 println!("=== MEMORY ===\n{}\n", stats);
                 if !mem.solutions.is_empty() {

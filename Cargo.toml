@@ -8,15 +8,15 @@ license = "GNU GPL v3.0"
 rust-version = "1.75"
 
 [workspace.dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 toml = "0.8"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-anyhow = "1"
-thiserror = "2"
-uuid = { version = "1", features = ["v4", "serde"] }
+anyhow = "1.0"
+thiserror = "2.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 indicatif = "0.17"
 
@@ -45,7 +45,7 @@ llamacpp-server = []
 custom-api = []
 llamacpp-builtin = ["dep:llama-cpp-2"]
 vulkan = ["llamacpp-builtin", "llama-cpp-2?/vulkan"]
-full = ["ollama", "lmstudio", "llamacpp-server", "custom-api", "llamacpp-builtin"]
+full = ["ollama", "lmstudio", "llamacpp-server", "custom-api", "llamacpp-builtin", "vulkan"]
 
 [dependencies]
 # Async runtime

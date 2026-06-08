@@ -30,6 +30,11 @@ enum TddPhase {
 /// The main ReAct agent loop.
 pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session> {
     let cancel = CancellationToken::new();
+    let cancel_clone = cancel.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        cancel_clone.cancel();
+    });
     let tool_registry = Arc::new(ToolRegistry::new(&ctx));
     let tool_parser = ToolParser::new();
     let _planner = Planner::new(ctx.config.max_iterations);
@@ -39,7 +44,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     let mut step_iterations: HashMap<u32, u32> = HashMap::new();
     let mut step_failures: HashMap<u32, u32> = HashMap::new();
     let mut plan_checked = false;
-    let mut plan_recovery_fired = false;
+    let mut plan_recovery_count: u32 = 0;
 
     // Behavioral mode state
     let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
@@ -59,7 +64,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
     let supports_native_tools = llm.supports_tools();
     let context_limit = (llm_config.context_size as f64 * 3.0) as usize;
-    let system_prompt = build_system_prompt(&ctx, supports_native_tools);
+    let system_prompt = build_system_prompt(&ctx, supports_native_tools).await;
     let compressor = ContextCompressor::new(
         crate::core::compression::CompressionConfig::default()
     );
@@ -204,7 +209,14 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     crate::models::message::Message::user(&summary_prompt),
                 ];
 
-                let summary_result = llm.chat(&summary_messages, None).await;
+                let summary_result = tokio::time::timeout(
+                    std::time::Duration::from_secs(300),
+                    llm.chat(&summary_messages, None),
+                ).await;
+                let summary_result = match summary_result {
+                    Ok(result) => result,
+                    Err(_) => Err(Box::new(std::io::Error::new(std::io::ErrorKind::TimedOut, "LLM summarization timed out")) as Box<dyn std::error::Error + Send + Sync>),
+                };
                 match summary_result {
                     Ok(resp) => {
                         let summary_text = resp.content.trim().to_string();
@@ -213,10 +225,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                             conversation = ContextCompressor::inject_summary(
                                 conversation, &summary_text, start, end, insert_at
                             );
-                            if let Ok(mut mem) = ctx.memory.lock() {
-                                mem.add_preference("_compressed_section",
-                                    &summary_text.chars().take(500).collect::<String>());
-                            }
+                            let mut mem = ctx.memory.lock().await;
+                            mem.add_preference("_compressed_section",
+                                &summary_text.chars().take(500).collect::<String>());
                             if !session.tui_mode {
                                 eprintln!("── [Context summarized: {} msgs → {} msgs] ──",
                                     before, conversation.len());
@@ -229,10 +240,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                         let (compressed, summary) = compressor.compress(&conversation, llm_config.context_size as usize);
                         conversation = compressed;
                         if !summary.is_empty() {
-                            if let Ok(mut mem) = ctx.memory.lock() {
-                                mem.add_preference("_compressed_section",
-                                    &summary.chars().take(500).collect::<String>());
-                            }
+                            let mut mem = ctx.memory.lock().await;
+                            mem.add_preference("_compressed_section",
+                                &summary.chars().take(500).collect::<String>());
                         }
                         if !session.tui_mode {
                             eprintln!("── [Context compressed: {} msgs → {} msgs] ──",
@@ -247,9 +257,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             let (compressed, summary) = compressor.compress(&conversation, llm_config.context_size as usize);
             conversation = compressed;
             if !summary.is_empty() {
-                if let Ok(mut mem) = ctx.memory.lock() {
-                    mem.add_preference("_compressed_section", &summary.chars().take(500).collect::<String>());
-                }
+                let mut mem = ctx.memory.lock().await;
+                mem.add_preference("_compressed_section", &summary.chars().take(500).collect::<String>());
             }
             if !session.tui_mode {
                 eprintln!("── [Context compressed: {} msgs → {} msgs] ──",
@@ -263,7 +272,11 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
         if supports_native_tools {
             let tools: Vec<Tool> = tool_registry.as_llm_tools();
-            let result = llm.chat(&conversation, Some(&tools)).await
+            let result = tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                llm.chat(&conversation, Some(&tools)),
+            ).await
+                .map_err(|_| anyhow::anyhow!("LLM chat timed out after 300s"))?
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
             response_text = result.content;
             tool_calls_result = result.tool_calls;
@@ -273,10 +286,20 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 std::io::Write::flush(&mut std::io::stdout())?;
             }
         } else {
-            let mut stream = llm.stream_chat(&conversation).await
+            let mut stream = tokio::time::timeout(
+                std::time::Duration::from_secs(60),
+                llm.stream_chat(&conversation),
+            ).await
+                .map_err(|_| anyhow::anyhow!("LLM stream_chat timed out after 60s"))?
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
 
-            while let Some(chunk) = stream.next().await {
+            while let Some(chunk) = tokio::time::timeout(
+                std::time::Duration::from_secs(120),
+                stream.next(),
+            ).await.unwrap_or_else(|_| {
+                tracing::warn!("Stream timed out waiting for next token");
+                None
+            }) {
                 match chunk {
                     Ok(token) => {
                         response_text.push_str(&token);
@@ -336,9 +359,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             if iteration == 0 {
                 session.status = crate::agent::session::SessionStatus::Completed;
                 session.final_output = Some(response_text.clone());
-                if let Ok(mut mem) = ctx.memory.lock() {
-                    mem.add_task(&session.base_task, vec![], &session.final_output.clone().unwrap_or_default());
-                }
+                let mut mem = ctx.memory.lock().await;
+                mem.add_task(&session.base_task, vec![], &session.final_output.clone().unwrap_or_default());
                 break;
             } else {
                 conversation.push(Message::system(
@@ -398,9 +420,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         if let Action::Finish { output } = &action {
             session.status = crate::agent::session::SessionStatus::Completed;
             session.final_output = output.clone();
-            if let Ok(mut mem) = ctx.memory.lock() {
-                mem.add_task(&session.base_task, action_history.clone(), &session.final_output.clone().unwrap_or_default());
-            }
+            let mut mem = ctx.memory.lock().await;
+            mem.add_task(&session.base_task, action_history.clone(), &session.final_output.clone().unwrap_or_default());
             break;
         }
 
@@ -528,7 +549,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         if matches!(&action, Action::PlanCreate { .. } | Action::PlanStepComplete { .. } | Action::PlanStepFail { .. } | Action::PlanStatus { .. }) {
             let result_text = handle_plan_action(
                 &action, &mut plan, &mut current_step,
-                &mut step_iterations, &mut step_failures, &mut plan_recovery_fired,
+                &mut step_iterations, &mut step_failures, &mut plan_recovery_count,
             );
             conversation.push(Message::tool(result_text.clone(), format!("plan_{}", iteration)));
             session.variables.insert("last_action".to_string(), action_type.to_string());
@@ -566,6 +587,25 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 // Clear failure tracking on success
                 failure_tracker.clear(action_type);
 
+                // TDD phase transitions (plan-independent)
+                if behavior == crate::core::behavior::BehaviorMode::Tdd {
+                    if action_type == "write_file" && tdd_phase == TddPhase::Red {
+                        tdd_phase = TddPhase::Green;
+                    } else if action_type == "write_file" && tdd_phase == TddPhase::Green {
+                        tdd_phase = TddPhase::Refactor;
+                    } else if action_type == "execute_command" && tdd_phase == TddPhase::Green {
+                        tdd_phase = TddPhase::Refactor;
+                    }
+                }
+
+                // Refactor mode: test success clears the gate
+                if behavior == crate::core::behavior::BehaviorMode::Refactor && action_type == "execute_command" {
+                    let output_lower = output.to_lowercase();
+                    if !output_lower.contains("fail") && !output_lower.contains("error") {
+                        tests_passed_before_write = true;
+                    }
+                }
+
                 // --- Plan step completion detection ---
                 if let Some(ref mut p) = plan {
                     if let Some(step) = p.steps.get(current_step) {
@@ -573,25 +613,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                         let action_matches = step.action == "execute_command" || action_type == step.action;
                         if action_matches && step.status != StepStatus::Completed {
                             Planner::complete_step(p, current_step, format!("{} succeeded", action_type));
-
-                            // If this was a WriteFile to a test file in TDD mode, advance phase
-                            if behavior == crate::core::behavior::BehaviorMode::Tdd {
-                                if action_type == "write_file" && tdd_phase == TddPhase::Red {
-                                    tdd_phase = TddPhase::Green;
-                                } else if action_type == "write_file" && tdd_phase == TddPhase::Green {
-                                    tdd_phase = TddPhase::Refactor;
-                                } else if action_type == "execute_command" && tdd_phase == TddPhase::Green {
-                                    tdd_phase = TddPhase::Refactor;
-                                }
-                            }
-
-                            // If Refactor mode test succeeded, allow writes
-                            if behavior == crate::core::behavior::BehaviorMode::Refactor && action_type == "execute_command" {
-                                let output_lower = output.to_lowercase();
-                                if !output_lower.contains("fail") && !output_lower.contains("error") {
-                                    tests_passed_before_write = true;
-                                }
-                            }
 
                             // Advance to next ready step
                             let next = Planner::next_ready_step(p);
@@ -643,16 +664,16 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 
                 // Learn from mistakes: store in persistent memory
                 if failure_tracker.should_suggest_correction(&action_type_str, 2) {
-                    if let Ok(mut mem) = ctx.memory.lock() {
-                        let error_msg = format!("{}: {}", action.description(), e);
-                        let lesson = failure_tracker.correction_prompt(&action_type_str);
-                        mem.add_mistake(
-                            &session.base_task,
-                            &error_msg,
-                            &lesson,
-                            &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
-                            &action_history,
-                        );
+                    let mut mem = ctx.memory.lock().await;
+                    let error_msg = format!("{}: {}", action.description(), e);
+                    let lesson = failure_tracker.correction_prompt(&action_type_str);
+                    mem.add_mistake(
+                        &session.base_task,
+                        &error_msg,
+                        &lesson,
+                        &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
+                        &action_history,
+                    );
 
                         // Fix mode: include hypothesis in mistake record
                         if behavior == crate::core::behavior::BehaviorMode::Fix {
@@ -666,7 +687,6 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                                 );
                             }
                         }
-                    }
                 }
 
                 // Self-correction prompt after repeated failures
@@ -718,8 +738,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     let consecutive_fails: u32 = (0..p.steps.len())
                         .filter_map(|i| step_failures.get(&(i as u32)))
                         .sum();
-                    if consecutive_fails >= 6 && !plan_recovery_fired {
-                        plan_recovery_fired = true;
+                    if consecutive_fails >= 6 && plan_recovery_count < 3 {
+                        plan_recovery_count += 1;
                         conversation.push(Message::system(
                             "Replan needed: multiple steps are failing. Update PLAN.md with a new approach for the remaining steps. \
                              Consider breaking large steps into smaller ones."
@@ -762,7 +782,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     }
                     step_iterations.clear();
                     step_failures.clear();
-                    plan_recovery_fired = false;
+                    plan_recovery_count = 0;
                     if !session.tui_mode {
                         eprintln!("── [Plan re-parsed from PLAN.md] ──");
                     }
@@ -801,7 +821,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             session.variables.insert("plan_completed_steps".to_string(), done_count.to_string());
             session.variables.insert("plan_goal".to_string(), p.goal.clone());
         }
-        crate::agent::session::save_session_metadata(&ctx, &session)?;
+        crate::agent::session::save_session_metadata(&ctx, &session).await?;
 
         // Check loop exit conditions
         if session.status != crate::agent::session::SessionStatus::Active {
@@ -915,7 +935,7 @@ fn action_type_name(action: &Action) -> &'static str {
     }
 }
 
-fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String {
+async fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String {
     let mode = ctx.security.current_mode.as_str();
     let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
     let workspace = ctx.paths.workspace_dir();
@@ -923,10 +943,7 @@ fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> String 
     let os_hint = if cfg!(windows) { "Windows" } else { "Linux/Mac" };
     let shell_hint = if cfg!(windows) { "cmd.exe" } else { "bash" };
 
-    let memory_context = match ctx.memory.lock() {
-        Ok(m) => m.to_context_string(),
-        Err(_) => String::new(),
-    };
+    let memory_context = ctx.memory.lock().await.to_context_string();
 
     let doc_provider = crate::core::docs::DocProvider::load(&ctx.paths.root_dir().join("docs"));
     let doc_context = doc_provider.to_context_string();
@@ -1054,8 +1071,8 @@ RULES:
     let behavior_note = behavior.system_prompt_note();
     let skill_injection = ctx.skill_registry
         .lock()
-        .map(|r| r.as_prompt_injection())
-        .unwrap_or_default();
+        .await
+        .as_prompt_injection();
 
     if supports_native_tools {
         format!(
@@ -1203,7 +1220,7 @@ fn handle_plan_action(
     current_step: &mut usize,
     step_iterations: &mut HashMap<u32, u32>,
     step_failures: &mut HashMap<u32, u32>,
-    plan_recovery_fired: &mut bool,
+    plan_recovery_count: &mut u32,
 ) -> String {
     match action {
         Action::PlanCreate { goal, steps } => {
@@ -1216,7 +1233,7 @@ fn handle_plan_action(
             }
             step_iterations.clear();
             step_failures.clear();
-            *plan_recovery_fired = false;
+            *plan_recovery_count = 0;
             format!("Plan created: {}. {} steps total.", goal, total)
         }
         Action::PlanStepComplete { step_id, result } => {

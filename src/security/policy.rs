@@ -178,13 +178,94 @@ impl PolicyEngine {
     }
 
     /// Check if a command is on the blacklist.
+    /// Uses token-aware matching to prevent bypass via indirection.
     pub fn is_blacklisted(&self, command: &str) -> bool {
         let lower = command.to_lowercase();
+
+        // Check raw substring patterns (first line of defense)
         for pattern in &self.command_blacklist {
             if lower.contains(&pattern.to_lowercase()) {
                 return true;
             }
         }
+
+        // Token-aware check: extract all shell tokens and check each one
+        let tokens = tokenize_command(command);
+        let dangerous_tokens = [
+            "rm", "mkfs", "dd", "format", "del", "rd", "reg", "sc",
+            "shutdown", "reboot", "systemctl",
+        ];
+        for token in &tokens {
+            let t_lower = token.to_lowercase();
+            if dangerous_tokens.contains(&t_lower.as_str()) {
+                // Check for dangerous flags
+                if t_lower == "rm" {
+                    if tokens.iter().any(|t| t == "-rf" || t == "-r" || t == "-f" || t == "--recursive" || t == "--force" || t == "-fr" || t == "-rf" || t == "/s" || t == "/q") {
+                        return true;
+                    }
+                }
+                if t_lower == "format" || t_lower == "mkfs" || t_lower == "dd" {
+                    return true;
+                }
+                if t_lower == "del" && tokens.iter().any(|t| t == "/f" || t == "/s" || t == "/q") {
+                    return true;
+                }
+                if t_lower == "rd" && tokens.iter().any(|t| t == "/s" || t == "/q") {
+                    return true;
+                }
+                if t_lower == "reg" || t_lower == "sc" {
+                    return true;
+                }
+                if t_lower == "shutdown" || t_lower == "reboot" {
+                    return true;
+                }
+                if t_lower == "systemctl" && tokens.iter().any(|t| t == "disable" || t == "stop" || t == "kill") {
+                    return true;
+                }
+            }
+        }
+
         false
     }
+}
+
+/// Simple shell command tokenizer that splits by whitespace, pipes, redirects, etc.
+fn tokenize_command(command: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_single = false;
+    let mut in_double = false;
+
+    for ch in command.chars() {
+        match ch {
+            '\'' if !in_double => {
+                in_single = !in_single;
+                current.push(ch);
+            }
+            '"' if !in_single => {
+                in_double = !in_double;
+                current.push(ch);
+            }
+            ' ' | '\t' if !in_single && !in_double => {
+                if !current.is_empty() {
+                    tokens.push(current.clone());
+                    current.clear();
+                }
+            }
+            '|' | ';' | '&' | '>' | '<' if !in_single && !in_double => {
+                if !current.is_empty() {
+                    tokens.push(current.clone());
+                    current.clear();
+                }
+                tokens.push(ch.to_string());
+            }
+            _ => {
+                current.push(ch);
+            }
+        }
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    tokens
 }
