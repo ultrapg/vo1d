@@ -94,6 +94,30 @@ pub enum Action {
     CreateDirectory {
         path: String,
     },
+    #[serde(rename = "edit_file")]
+    EditFile {
+        path: String,
+        start_line: usize,
+        end_line: usize,
+        content: String,
+    },
+    #[serde(rename = "search_in_files")]
+    SearchInFiles {
+        pattern: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        path: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        file_pattern: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        max_results: Option<usize>,
+    },
+    #[serde(rename = "rag_query")]
+    RagQuery {
+        path: String,
+        query: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        num_chunks: Option<usize>,
+    },
     #[serde(rename = "file_metadata")]
     FileMetadata {
         path: String,
@@ -202,6 +226,11 @@ impl Action {
             }
             Action::CopyFile { source, destination } => format!("Copy {} to {}", source, destination),
             Action::CreateDirectory { path } => format!("Create directory: {}", path),
+            Action::EditFile { path, start_line, end_line, .. } => {
+                format!("Edit file: {} (lines {}-{})", path, start_line, end_line)
+            }
+            Action::SearchInFiles { pattern, .. } => format!("Search in files: {}", pattern),
+            Action::RagQuery { path, query, .. } => format!("RAG query in {}: {}", path, query),
             Action::FileMetadata { path } => format!("Metadata: {}", path),
             Action::HttpRequest { url, .. } => format!("HTTP request: {}", url),
             Action::Finish { output: _ } => "Finish task".to_string(),
@@ -223,7 +252,7 @@ impl Action {
 
     /// Returns true if this action is potentially destructive.
     pub fn is_destructive(&self) -> bool {
-        matches!(self, Action::DeleteFile { .. } | Action::WriteFile { .. } | Action::RestoreBackup { .. })
+        matches!(self, Action::DeleteFile { .. } | Action::WriteFile { .. } | Action::EditFile { .. } | Action::RestoreBackup { .. })
     }
 }
 

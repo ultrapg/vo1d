@@ -84,6 +84,20 @@ impl ToolExecutor {
                 let expanded = ctx.paths.resolve_workspace_path(path);
                 FileOps::create_dir(&expanded)
             }
+            Action::EditFile { path, start_line, end_line, content } => {
+                let expanded = ctx.paths.resolve_workspace_path(path);
+                FileOps::edit(&expanded, *start_line, *end_line, content)
+            }
+            Action::SearchInFiles { pattern, path, file_pattern, max_results } => {
+                let search_path = path.as_ref()
+                    .map(|p| ctx.paths.resolve_workspace_path(p))
+                    .unwrap_or_else(|| ctx.paths.workspace_dir());
+                FileOps::search_in_files(&search_path, pattern, file_pattern.as_deref(), *max_results)
+            }
+            Action::RagQuery { path, query, num_chunks } => {
+                let expanded = ctx.paths.resolve_workspace_path(path);
+                FileOps::rag_query(&expanded, query, *num_chunks)
+            }
             Action::FileMetadata { path } => {
                 let expanded = ctx.paths.resolve_workspace_path(path);
                 FileOps::metadata(&expanded)

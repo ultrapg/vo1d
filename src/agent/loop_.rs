@@ -945,6 +945,9 @@ fn action_type_name(action: &Action) -> &'static str {
         Action::InvokeSkill { .. } => "invoke_skill",
         Action::ListSkills { .. } => "list_skills",
         Action::DeleteSkill { .. } => "delete_skill",
+        Action::EditFile { .. } => "edit_file",
+        Action::SearchInFiles { .. } => "search_in_files",
+        Action::RagQuery { .. } => "rag_query",
     }
 }
 

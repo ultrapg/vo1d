@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use regex::Regex;
 use std::path::Path;
 
 /// File system operations tool.
@@ -244,6 +245,240 @@ impl FileOps {
         std::fs::create_dir_all(path)
             .with_context(|| format!("Failed to create directory: {}", path.display()))?;
         Ok(format!("Created directory: {}", path.display()))
+    }
+
+    /// Edit a file by replacing lines start_line..=end_line with new_content.
+    /// Requires the model to have read the file first (call read_file before editing).
+    pub fn edit(path: &Path, start_line: usize, end_line: usize, new_content: &str) -> Result<String> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read file for editing: {}", path.display()))?;
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+
+        if start_line < 1 || start_line > total_lines {
+            anyhow::bail!(
+                "start_line {} is out of range (file has {} lines)",
+                start_line, total_lines
+            );
+        }
+        let end = end_line.min(total_lines);
+        if end < start_line {
+            anyhow::bail!("end_line {} is before start_line {}", end_line, start_line);
+        }
+
+        // Extract the old content for the diff output
+        let old_snippet = lines[start_line.saturating_sub(1)..end].join("\n");
+
+        // Build new content: before + replacement + after
+        let before = lines[..start_line.saturating_sub(1)].join("\n");
+        let after = lines[end..].join("\n");
+
+        let mut result = String::new();
+        if !before.is_empty() {
+            result.push_str(&before);
+            result.push('\n');
+        }
+        result.push_str(new_content);
+        if !after.is_empty() {
+            result.push('\n');
+            result.push_str(&after);
+        }
+
+        // Atomic write
+        let tmp_path = path.with_extension("tmp");
+        std::fs::write(&tmp_path, &result)
+            .with_context(|| format!("Failed to write temporary file: {}", tmp_path.display()))?;
+        std::fs::rename(&tmp_path, path)
+            .with_context(|| format!("Failed to rename temporary file to: {}", path.display()))?;
+
+        let new_lines = new_content.lines().count();
+        let removed_lines = end - start_line + 1;
+        Ok(format!(
+            "Edited {} (lines {}-{}): removed {} lines, added {} lines\n--- old ---\n{}\n--- new ---\n{}",
+            path.display(), start_line, end, removed_lines, new_lines, old_snippet, new_content
+        ))
+    }
+
+    /// Search within file contents for lines matching a pattern.
+    /// Searches file contents (not just filenames) using regex or substring matching.
+    /// Returns matching lines with file paths and line numbers.
+    pub fn search_in_files(
+        path: &Path,
+        pattern: &str,
+        file_pattern: Option<&str>,
+        max_results: Option<usize>,
+    ) -> Result<String> {
+        let max = max_results.unwrap_or(50);
+        let mut results: Vec<(String, usize, String)> = Vec::new();
+        let re = Regex::new(pattern).ok();
+
+        let walker = walkdir(path, true);
+        for entry in walker {
+            if results.len() >= max {
+                break;
+            }
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+            let ft = match entry.file_type() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            if ft.is_dir() {
+                continue;
+            }
+
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            // Apply file pattern filter if specified
+            if let Some(fp) = file_pattern {
+                if !glob_match(&file_name, fp) {
+                    continue;
+                }
+            }
+
+            // Read and search
+            let content = match std::fs::read_to_string(entry.path()) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+
+            for (i, line) in content.lines().enumerate() {
+                if results.len() >= max {
+                    break;
+                }
+                let matched = if let Some(ref regex) = re {
+                    regex.is_match(line)
+                } else {
+                    line.to_lowercase().contains(&pattern.to_lowercase())
+                };
+                if matched {
+                    let relative = match entry.path().strip_prefix(path) {
+                        Ok(p) => p.to_string_lossy().to_string(),
+                        Err(_) => entry.path().to_string_lossy().to_string(),
+                    };
+                    results.push((
+                        relative,
+                        i + 1,
+                        line.to_string(),
+                    ));
+                }
+            }
+        }
+
+        if results.is_empty() {
+            return Ok(format!(
+                "No matches for '{}' in {}",
+                pattern,
+                path.display()
+            ));
+        }
+
+        let mut output = format!(
+            "Found {} matches for '{}':\n\n",
+            results.len(),
+            pattern
+        );
+        for (file_path, line_num, line_content) in &results {
+            let trimmed = if line_content.len() > 200 {
+                format!("{}...", &line_content[..200])
+            } else {
+                line_content.clone()
+            };
+            output.push_str(&format!("{}:{}: {}\n", file_path, line_num, trimmed));
+        }
+        Ok(output)
+    }
+
+    /// RAG-style query for large files: split file into chunks, find the most relevant
+    /// chunks matching a query using simple keyword frequency scoring.
+    /// Returns the most relevant chunks with line ranges.
+    pub fn rag_query(path: &Path, query: &str, num_chunks: Option<usize>) -> Result<String> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read file: {}", path.display()))?;
+        let num = num_chunks.unwrap_or(3).min(10);
+
+        // Split into chunks of ~100 lines each
+        let lines: Vec<&str> = content.lines().collect();
+        let total_lines = lines.len();
+        let chunk_size = 100;
+        let mut chunks: Vec<(usize, usize, String)> = Vec::new();
+
+        for chunk_start in (0..total_lines).step_by(chunk_size) {
+            let chunk_end = (chunk_start + chunk_size).min(total_lines);
+            let chunk_text = lines[chunk_start..chunk_end].join("\n");
+            chunks.push((chunk_start + 1, chunk_end, chunk_text));
+        }
+
+        if chunks.is_empty() {
+            return Ok("Empty file".to_string());
+        }
+
+        // Score chunks by keyword frequency (simple TF)
+        let query_keywords: Vec<&str> = query
+            .split_whitespace()
+            .filter(|w| w.len() > 2)
+            .collect();
+
+        if query_keywords.is_empty() {
+            // No meaningful keywords, return first chunks
+            let mut output = format!(
+                "File: {} ({} lines)\n\nShowing first {} chunks:\n\n",
+                path.display(),
+                total_lines,
+                num.min(chunks.len())
+            );
+            for (cs, ce, text) in chunks.iter().take(num.min(chunks.len())) {
+                output.push_str(&format!("--- Lines {}-{} ---\n{}\n\n", cs, ce, text));
+            }
+            return Ok(output);
+        }
+
+        let mut scored: Vec<(f64, usize, usize, &str)> = chunks
+            .iter()
+            .map(|(cs, ce, text)| {
+                let lower = text.to_lowercase();
+                let score: f64 = query_keywords
+                    .iter()
+                    .map(|kw| {
+                        let count = lower.matches(&kw.to_lowercase()).count() as f64;
+                        count * (1.0 + 1.0 / (kw.len() as f64)) // slight boost for longer terms
+                    })
+                    .sum();
+                (score, *cs, *ce, text.as_str())
+            })
+            .collect();
+
+        // Sort by score descending
+        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Take top chunks
+        let top = scored.into_iter().take(num);
+        let mut output = format!(
+            "File: {} ({} lines)\nQuery: {}\n\nMost relevant {} chunks:\n\n",
+            path.display(),
+            total_lines,
+            query,
+            num
+        );
+
+        let mut rank = 1;
+        for (score, cs, ce, text) in top {
+            if score > 0.0 {
+                output.push_str(&format!(
+                    "[{}/{}] Lines {}-{} (relevance: {:.2})\n---\n{}\n\n",
+                    rank, num, cs, ce, score, text
+                ));
+            } else {
+                output.push_str(&format!(
+                    "[{}/{}] Lines {}-{} (no keyword match, showing as fallback)\n---\n{}\n\n",
+                    rank, num, cs, ce, text
+                ));
+            }
+            rank += 1;
+        }
+
+        Ok(output)
     }
 
     /// Get file metadata.

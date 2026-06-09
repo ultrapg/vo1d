@@ -87,6 +87,50 @@ impl ToolRegistry {
             }),
         });
 
+        tools.insert("edit_file".to_string(), ToolInfo {
+            name: "edit_file",
+            description: "Edit a file by replacing a range of lines with new content. IMPORTANT: First read the file with read_file to see its contents, then call edit_file with the exact line range you want to replace. The new_content parameter replaces lines from start_line to end_line (inclusive, 1-indexed). This is safer than write_file for making targeted changes.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Path to the file to edit" },
+                    "start_line": { "type": "integer", "description": "First line to replace (1-indexed, inclusive)" },
+                    "end_line": { "type": "integer", "description": "Last line to replace (1-indexed, inclusive)" },
+                    "content": { "type": "string", "description": "New content to insert in place of the removed lines" }
+                },
+                "required": ["path", "start_line", "end_line", "content"]
+            }),
+        });
+
+        tools.insert("search_in_files".to_string(), ToolInfo {
+            name: "search_in_files",
+            description: "Search for text patterns within file contents. Searches the actual text content of files (not just filenames). Supports regex patterns and plain text. Optionally filter by file glob pattern. Use this to find where specific code, strings, or patterns are used in your codebase.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "pattern": { "type": "string", "description": "Text or regex pattern to search for within file contents" },
+                    "path": { "type": "string", "description": "Directory or file to search in (default: workspace root)" },
+                    "file_pattern": { "type": "string", "description": "Optional glob to filter which files to search (e.g. '*.rs', '*.{js,ts}')" },
+                    "max_results": { "type": "integer", "description": "Maximum number of matching lines to return (default: 50)" }
+                },
+                "required": ["pattern"]
+            }),
+        });
+
+        tools.insert("rag_query".to_string(), ToolInfo {
+            name: "rag_query",
+            description: "Query a large file by finding the most relevant sections. Splits the file into chunks and scores each chunk against the query using keyword matching. Use this to find relevant parts of large files (>500 lines) instead of reading the entire file. Returns the top matching chunks with line numbers.",
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Path to the file to query" },
+                    "query": { "type": "string", "description": "Keywords or question describing what to find in the file" },
+                    "num_chunks": { "type": "integer", "description": "Number of relevant chunks to return (default: 3, max: 10)" }
+                },
+                "required": ["path", "query"]
+            }),
+        });
+
         tools.insert("file_metadata".to_string(), ToolInfo {
             name: "file_metadata",
             description: "Get metadata about a file or directory.",
