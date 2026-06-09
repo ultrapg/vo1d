@@ -188,8 +188,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         let conv_chars: usize = conversation.iter().map(|m| m.content.len() + 100).sum();
         let usage_ratio = if context_limit > 0 { conv_chars as f64 / context_limit as f64 } else { 0.0 };
 
-        if usage_ratio > 0.60 && conversation.len() > 10 {
-            // --- LLM summarization at high usage ---
+        if usage_ratio > 0.60 && conversation.len() > 10 && !backend.reasoning {
+            // --- LLM summarization at high usage (skipped for reasoning models which produce long <think> blocks) ---
             let summarization_range = compressor.summarization_range(&conversation);
             if let Some((start, end, insert_at)) = summarization_range {
                 // Build summarization prompt from the slice
@@ -297,8 +297,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 .map_err(|_| anyhow::anyhow!("LLM stream_chat timed out after {}s", timeout_secs))?
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
 
+            let stream_chunk_timeout = llm_config.inference_timeout_secs.max(120);
             while let Some(chunk) = tokio::time::timeout(
-                std::time::Duration::from_secs(120),
+                std::time::Duration::from_secs(stream_chunk_timeout),
                 stream.next(),
             ).await.unwrap_or_else(|_| {
                 tracing::warn!("Stream timed out waiting for next token");
@@ -843,14 +844,14 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 }
 
 fn format_for_display(text: &str) -> String {
-    let re = Regex::new(r"```jsonl?[^\n]*\n?").unwrap();
+    let re = Regex::new(r"^```(jsonl?)?\s*$").unwrap();
     text
         .replace("<think>", "─── Reasoning ───\n")
         .replace("</think>", "\n───────────────\n")
         .lines()
         .map(|line| {
-            if re.is_match(line) {
-                "─── Tool ───\n```jsonl".to_string()
+            if re.is_match(line.trim()) {
+                "─── Tool ───".to_string()
             } else {
                 line.to_string()
             }
