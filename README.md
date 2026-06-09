@@ -11,7 +11,7 @@ vo1d is built on the principle that AI agents should be **private, offline, and 
 - **Local LLM inference** — Built-in llama.cpp backend, no cloud dependency
 - **Native tool calling** — Models with structured function calling support (Qwen 2.5/3, Llama 3.1+, Gemma 3/4, Mistral, etc.) receive inline tool definitions and their JSON tool call responses are parsed directly; fallback to text-based ````json```` extraction for all others
 - **Autonomous task execution** — ReAct agent loop that plans, acts, and iterates
-- **5 security modes** — Safe, Interactive, PowerUser, Autonomous, YOLO
+- **5 security modes** — Safe, Interactive, PowerUser, Autonomous, Unrestricted
 - **24 built-in tools** — File operations, shell commands, web tools, change tracking, restore, plan management, and skill authoring
 - **Skill system** — Create, store, invoke, list, and delete reusable multi-step procedures. Skills persist as JSON files and support parameter schemas, making common workflows (setup project, run tests, deploy) repeatable with one command
 - **Plan tools** — `plan_create`, `plan_step_complete`, `plan_step_fail`, `plan_status` for structured multi-step task execution with DAG dependency ordering and auto-advancement
@@ -632,7 +632,7 @@ Skill step arguments support template variables using `{{variable_name}}` syntax
 | **Interactive** (default) | ✅ Ask | ✅ Ask | ✅ Ask | ❌ Blocked | ❌ Blocked |
 | **PowerUser** | ✅ Ask | ✅ Ask | ✅ Ask | ✅ Ask | ❌ Blocked |
 | **Autonomous** | ✅ Auto | ✅ Auto | ✅ Ask | ❌ Blocked | ❌ Blocked |
-| **YOLO** | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto |
+| **Unrestricted** | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto | ✅ Auto |
 
 ### Mode Details
 
@@ -640,7 +640,7 @@ Skill step arguments support template variables using `{{variable_name}}` syntax
 - **Interactive (default)**: Every write and command execution prompts the user for approval. Outside-workspace access also prompts. System modifications and privilege escalation are blocked. Best balance of safety and utility.
 - **PowerUser**: Like Interactive but also allows system modifications with approval prompts. Use when you need to install packages or modify system configuration.
 - **Autonomous**: Auto-approves all writes and commands within the workspace. Outside-workspace access still prompts. System modifications blocked. Use for trusted automated tasks.
-- **YOLO**: All actions auto-approved, including privilege escalation and system modifications. Use with extreme caution — the model has full access to your system.
+- **Unrestricted**: All actions auto-approved, including privilege escalation and system modifications. Use with extreme caution — the model has full access to your system.
 
 ### Security & Robustness Features
 
@@ -1218,7 +1218,7 @@ All actions are logged to JSONL files in `logs/`:
 ```
 logs/
 ├── audit_YYYY-MM-DD.jsonl       # All actions
-├── yolo_audit_YYYY-MM-DD.jsonl  # YOLO mode actions (extra detail)
+├── unrestricted_audit_YYYY-MM-DD.jsonl  # Unrestricted mode actions (extra detail)
 └── errors.jsonl                 # Error events
 ```
 
@@ -1266,10 +1266,10 @@ Commands:
 
 Options:
       --model <MODEL>           Override default model
-      --mode <MODE>             Security mode (safe, interactive, power-user, autonomous, yolo)
+      --mode <MODE>             Security mode (safe, interactive, power-user, autonomous, unrestricted)
       --behavior <BEHAVIOR>     Behavior mode (normal, fix, research, refactor, tdd)
       --workspace <DIR>         Custom workspace directory
-      --yolo                    Enable YOLO mode (implies --mode yolo)
+      --unrestricted            Enable unrestricted mode (absolute autonomy)
       --yes, --jes              Auto-approve all actions
       --debug                   Enable verbose debug tracing
       --resume <ID>             Resume a session by ID
@@ -1669,7 +1669,7 @@ This prevents the model from bypassing the blacklist through shell tricks, varia
 The workspace sandbox ensures all file operations stay within the allowed directory:
 - `resolve_workspace_path()` validates resolved paths against the workspace root
 - Directory traversal attacks (`../../../etc/passwd`) are detected and blocked
-- Outside-workspace access is controlled by security mode (Safe/Interactive block, PowerUser/Autonomous/YOLO prompt or allow)
+- Outside-workspace access is controlled by security mode (Safe/Interactive block, PowerUser/Autonomous/Unrestricted prompt or allow)
 
 ### Output Size Limits
 
