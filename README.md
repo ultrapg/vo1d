@@ -9,7 +9,8 @@ vo1d is built on the principle that AI agents should be **private, offline, and 
 ## Features
 
 - **Local LLM inference** — Built-in llama.cpp backend, no cloud dependency
-- **Native tool calling** — Parser handles both `{"action": ...}` and OpenAI-style `{"name": ..., "arguments": {...}}"` formats, supporting models trained on function-calling data without native tool schema injection
+- **Native tool calling** — Parser handles both `{"action": ...}` and OpenAI-style `{"name": ..., "arguments": {...}}"` formats, with concise `- name: description` tool definitions to keep prompts small
+- **Single action enforcement** — Only one tool action per iteration; multi-action responses are rejected to prevent runaway execution
 - **Autonomous task execution** — ReAct agent loop that plans, acts, and iterates
 - **5 security modes** — Safe, Interactive, PowerUser, Autonomous, Unrestricted
 - **24 built-in tools** — File operations, shell commands, web tools, change tracking, restore, plan management, and skill authoring
@@ -276,7 +277,7 @@ vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **LLM-powered context
 
 1. **System prompt** is constructed with current mode, workspace path, memory context, available tools (including any saved skills), **and markdown documentation** (loaded from `docs/`)
 2. **User task** is appended as a message (ChatML format: `<|im_start|>system` / `<|im_start|>user` / `<|im_start|>assistant`)
-3. **Model generates** a response — tokens stream to console in real time. `<think>...</think>` blocks are displayed as `─── Reasoning ───` sections. Tool calls (` `` `json`` `) are shown under `─── Tool Call ───` labels. Tool results appear with `─── Result ───`
+3. **Model generates** a response — tokens stream to console in real time. `<think>...</think>` blocks are displayed as `─── Reasoning ───` sections. Tool calls (```` ```jsonl ````) are shown under `─── Tool ───` labels. Tool results appear with `─── Result ───`
 4. **Parser extracts** the JSON action from plain JSON, markdown code blocks, or heuristic patterns
 5. **Security policy** evaluates the action against the current mode
 6. **Action is executed** and the result (or error) is appended to the conversation
@@ -318,9 +319,9 @@ Each iteration follows this sequence:
 4. **Parse response** — extract action from JSON, tool calls, or heuristic fallback
 5. **Check conversational response** — if no tool intent detected, prompt for action
 6. **Check reasoning quality** — if no reasoning before action, inject reminder
-7. **Check for multiple actions** — warn if >1 JSON block detected
-8. **Loop detection** — if same action repeated 5+ times, restart iteration with warning
-9. **Handle Finish** — break loop if task is complete
+7.  **Enforce single action** — only the first tool action is taken; multi-action responses are rejected
+8.  **Loop detection** — if same action repeated 5+ times, restart iteration with warning
+9.  **Handle Finish** — break loop if task is complete
 10. **Behavior enforcement** — read-only phase, TDD phase transitions, refactor pre-checks
 11. **Security evaluation** — Allow/Ask/Block based on current security mode
 12. **Plan guidance** — soft alignment warning if action mismatches current plan step
@@ -1410,7 +1411,7 @@ Models are marked compatible if they fit within available RAM (or VRAM with GPU 
 
 - **CLI**: Entry point. Clap argument parser dispatches to `vo1d task`, `vo1d chat`, or `vo1d train`.
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider, memory store, skill registry. Cloned per task.
-- **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable. Each iteration: model generates response (streamed in real time — `<think>` blocks as `─── Reasoning ───`, tool calls as `─── Tool Call ───`, results as `─── Result ───`) → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking → skill resolution → behavior enforcement → context compression if needed. Auto-restarts if model repeats same action 5+ times.
+- **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable. Each iteration: model generates response (streamed in real time — `<think>` blocks as `─── Reasoning ───`, tool calls as `─── Tool ───`, results as `─── Result ───`) → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking → skill resolution → behavior enforcement → context compression if needed. Auto-restarts if model repeats same action 5+ times. Only one tool action per iteration is processed.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Implementations: builtin (llama.cpp), ollama, lmstudio, llamacpp-server, custom-api. Pluggable design.
 - **Tool System**: Registry of 24 tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup, plan tools (create, complete, fail, status), skill tools (create, invoke, list, delete).
 - **Security Manager**: Evaluates each action against the current mode. Approve, ask, or block. All decisions audited. Includes token-aware command blacklist and sandbox escape prevention.
@@ -1438,7 +1439,7 @@ User Input
         → Check context usage (summarize or prune if needed)
         → Call LLM (stream response to console)
         → Parse action from response (JSON or tool calls)
-        → Check for loops, reasoning quality, multiple actions
+        → Check for loops, reasoning quality, single action enforcement
         → Evaluate security policy (Allow/Ask/Block)
         → Execute tool action
         → Record result in conversation
