@@ -124,12 +124,16 @@ impl ToolParser {
         None
     }
 
+    /// Max length for heuristic-extracted values to prevent matching on natural language.
+    const MAX_HEURISTIC_LEN: usize = 200;
+
     /// Heuristic parse for simple action patterns.
     fn heuristic_parse(&self, text: &str) -> Option<Action> {
         let lower = text.to_lowercase();
 
         // Pattern: "execute command: cargo test"
         if let Some(cmd) = self.extract_after_prefix(&lower, &["execute command:", "run command:", "command:"]) {
+            if cmd.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::ExecuteCommand {
                 command: cmd.trim().to_string(),
                 timeout: None,
@@ -138,7 +142,8 @@ impl ToolParser {
         }
 
         // Pattern: "read file: path/to/file.txt"
-        if let Some(path) = self.extract_after_prefix(&lower, &["read file:", "read:", "open file:"]) {
+        if let Some(path) = self.extract_after_prefix(&lower, &["read file:", "open file:"]) {
+            if path.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::ReadFile {
                 path: path.trim().to_string(),
                 start_line: None,
@@ -147,7 +152,8 @@ impl ToolParser {
         }
 
         // Pattern: "write file: path/to/file.txt content: ..."
-        if let Some(rest) = self.extract_after_prefix(&lower, &["write file:", "write:", "create file:"]) {
+        if let Some(rest) = self.extract_after_prefix(&lower, &["write file:", "create file:"]) {
+            if rest.len() > Self::MAX_HEURISTIC_LEN { return None; }
             if let Some((path, content)) = rest.split_once("content:") {
                 return Some(Action::WriteFile {
                     path: path.trim().to_string(),
@@ -158,15 +164,17 @@ impl ToolParser {
         }
 
         // Pattern: "list directory: path"
-        if let Some(path) = self.extract_after_prefix(&lower, &["list directory:", "list:", "ls "]) {
+        if let Some(path) = self.extract_after_prefix(&lower, &["list directory:", "ls "]) {
+            if path.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::ListDirectory {
                 path: path.trim().to_string(),
                 pattern: None,
             });
         }
 
-        // Pattern: "web search: query" (must be before "search:" to avoid collision)
+        // Pattern: "web search: query" (must be before "search" to avoid collision)
         if let Some(query) = self.extract_after_prefix(&lower, &["web search:", "search web:", "search for:"]) {
+            if query.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::WebSearch {
                 query: query.trim().to_string(),
                 num_results: None,
@@ -174,15 +182,17 @@ impl ToolParser {
         }
 
         // Pattern: "web fetch: url"
-        if let Some(url) = self.extract_after_prefix(&lower, &["web fetch:", "fetch url:", "fetch:"]) {
+        if let Some(url) = self.extract_after_prefix(&lower, &["web fetch:", "fetch url:"]) {
+            if url.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::WebFetch {
                 url: url.trim().to_string(),
                 max_chars: None,
             });
         }
 
-        // Pattern: "search: pattern"
-        if let Some(pat) = self.extract_after_prefix(&lower, &["search:", "find:", "glob:"]) {
+        // Pattern: search files
+        if let Some(pat) = self.extract_after_prefix(&lower, &["search files:", "find files:", "glob:"]) {
+            if pat.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::SearchFiles {
                 pattern: pat.trim().to_string(),
                 path: None,
@@ -191,7 +201,8 @@ impl ToolParser {
         }
 
         // Pattern: "delete file: path"
-        if let Some(path) = self.extract_after_prefix(&lower, &["delete file:", "remove file:", "delete:", "remove:"]) {
+        if let Some(path) = self.extract_after_prefix(&lower, &["delete file:", "remove file:"]) {
+            if path.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::DeleteFile {
                 path: path.trim().to_string(),
                 pattern: None,
@@ -199,7 +210,8 @@ impl ToolParser {
         }
 
         // Pattern: "copy file: source -> destination"
-        if let Some(rest) = self.extract_after_prefix(&lower, &["copy file:", "copy:"]) {
+        if let Some(rest) = self.extract_after_prefix(&lower, &["copy file:"]) {
+            if rest.len() > Self::MAX_HEURISTIC_LEN { return None; }
             if let Some((src, dst)) = rest.split_once("->").or_else(|| rest.split_once(" to ")) {
                 return Some(Action::CopyFile {
                     source: src.trim().to_string(),
@@ -210,6 +222,7 @@ impl ToolParser {
 
         // Pattern: "create directory: path"
         if let Some(path) = self.extract_after_prefix(&lower, &["create directory:", "mkdir:", "create dir:"]) {
+            if path.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::CreateDirectory {
                 path: path.trim().to_string(),
             });
@@ -217,6 +230,7 @@ impl ToolParser {
 
         // Pattern: "file metadata: path"
         if let Some(path) = self.extract_after_prefix(&lower, &["file metadata:", "metadata:", "stat:", "file info:"]) {
+            if path.len() > Self::MAX_HEURISTIC_LEN { return None; }
             return Some(Action::FileMetadata {
                 path: path.trim().to_string(),
             });

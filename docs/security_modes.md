@@ -90,7 +90,7 @@ vo1d --mode autonomous "Set up the entire development environment"
 
 **Example**:
 ```bash
-vo1d --mode yolo "Do whatever is needed to complete the task"
+vo1d --mode unrestricted "Do whatever is needed to complete the task"
 ```
 
 ## Mode Selection Guidelines
@@ -119,7 +119,7 @@ vo1d --mode yolo "Do whatever is needed to complete the task"
 - You're confident in the agent's capabilities
 - You're doing batch processing or repetitive work
 
-### Choose YOLO Mode When:
+### Choose Unrestricted Mode When:
 - You're testing the agent's limits
 - You're doing experimental work
 - You fully understand the risks
@@ -133,7 +133,7 @@ vo1d --mode safe "task"
 vo1d --mode interactive "task"
 vo1d --mode poweruser "task"
 vo1d --mode autonomous "task"
-vo1d --mode yolo "task"
+vo1d --mode unrestricted "task"
 ```
 
 ### 2. Settings File

@@ -396,6 +396,7 @@ fn build_chat_prompt(messages: &[Message], max_context: usize) -> String {
 
 fn build_chat_prompt_with_tools(messages: &[Message], tools: &[Tool], max_context: usize) -> String {
     let mut parts = Vec::new();
+    let system_msg = messages.iter().find(|m| m.role == "system");
 
     for msg in messages {
         let role = match msg.role.as_str() {
@@ -405,21 +406,18 @@ fn build_chat_prompt_with_tools(messages: &[Message], tools: &[Tool], max_contex
             "tool" => "tool",
             _ => "user",
         };
-        if role == "system" {
-            let mut tool_block = String::from("\n\n# Available Tools\n");
-            for tool in tools {
-                tool_block.push_str(&format!(
-                    "\n## {}\n{}\n",
-                    tool.name, tool.description
-                ));
-                if !tool.parameters.is_null() {
-                    tool_block.push_str(&format!("```json\n{}\n```\n", tool.parameters));
-                }
-            }
-            tool_block.push_str("\nTo use a tool, respond with a JSON object: {\"name\": \"tool_name\", \"arguments\": {...}}");
-            parts.push(format!("<|im_start|>system\n{}<|im_end|>", format!("{}{}", msg.content, tool_block)));
-        } else {
-            parts.push(format!("<|im_start|>{}\n{}<|im_end|>", role, msg.content));
+        parts.push(format!("<|im_start|>{}\n{}<|im_end|>", role, msg.content));
+    }
+
+    // Append concise tool definitions after system message
+    if let Some(ref sys) = system_msg {
+        let mut tool_block = String::from("\n\nUse these tools by responding with: {\"name\": \"tool_name\", \"arguments\": {...}}\n\nTools:");
+        for tool in tools {
+            tool_block.push_str(&format!("\n- {}: {}", tool.name, tool.description));
+        }
+        // Replace original system message with enhanced one
+        if let Some(first_sys) = parts.iter_mut().find(|p| p.starts_with("<|im_start|>system\n")) {
+            *first_sys = format!("<|im_start|>system\n{}{}<|im_end|>", sys.content, tool_block);
         }
     }
 

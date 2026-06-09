@@ -237,10 +237,13 @@ Complete this task and then use "finish" to signal completion.
 {}{}
 
 WORKFLOW:
-1. First, create a PLAN.md file in the sandbox that lists the steps you will take to complete this task
-2. Execute each step from the plan one at a time
+1. Understand what needs to be done
+2. Execute each step one at a time
 3. Check your work after each step
 4. When all steps are done, call finish
+
+For complex multi-step tasks, consider creating a plan (via plan_create tool or PLAN.md) to track progress.
+For simple tasks, just do the work directly.
 
 NOTE: write_file automatically creates parent directories — no need to use create_directory first."#,
         task.id,

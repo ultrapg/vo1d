@@ -23,7 +23,7 @@ fn test_mode_from_str() {
     assert_eq!(SecurityMode::from_str("power-user"), Some(SecurityMode::PowerUser));
     assert_eq!(SecurityMode::from_str("poweruser"), Some(SecurityMode::PowerUser));
     assert_eq!(SecurityMode::from_str("autonomous"), Some(SecurityMode::Autonomous));
-    assert_eq!(SecurityMode::from_str("yolo"), Some(SecurityMode::Yolo));
+    assert_eq!(SecurityMode::from_str("unrestricted"), Some(SecurityMode::Unrestricted));
     assert_eq!(SecurityMode::from_str("unknown"), None);
     assert_eq!(SecurityMode::from_str(""), None);
 }
@@ -34,7 +34,7 @@ fn test_mode_as_str() {
     assert_eq!(SecurityMode::Interactive.as_str(), "Interactive");
     assert_eq!(SecurityMode::PowerUser.as_str(), "PowerUser");
     assert_eq!(SecurityMode::Autonomous.as_str(), "Autonomous");
-    assert_eq!(SecurityMode::Yolo.as_str(), "YOLO");
+    assert_eq!(SecurityMode::Unrestricted.as_str(), "Unrestricted");
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn test_mode_auto_approves() {
     assert!(!SecurityMode::Interactive.auto_approves());
     assert!(!SecurityMode::PowerUser.auto_approves());
     assert!(SecurityMode::Autonomous.auto_approves());
-    assert!(SecurityMode::Yolo.auto_approves());
+    assert!(SecurityMode::Unrestricted.auto_approves());
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn test_mode_allows_commands() {
     assert!(SecurityMode::Interactive.allows_commands());
     assert!(SecurityMode::PowerUser.allows_commands());
     assert!(SecurityMode::Autonomous.allows_commands());
-    assert!(SecurityMode::Yolo.allows_commands());
+    assert!(SecurityMode::Unrestricted.allows_commands());
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn test_mode_auto_elevates() {
     assert!(!SecurityMode::Interactive.auto_elevates());
     assert!(!SecurityMode::PowerUser.auto_elevates());
     assert!(!SecurityMode::Autonomous.auto_elevates());
-    assert!(SecurityMode::Yolo.auto_elevates());
+    assert!(SecurityMode::Unrestricted.auto_elevates());
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn test_mode_allows_system_mods() {
     assert!(!SecurityMode::Interactive.allows_system_mods());
     assert!(SecurityMode::PowerUser.allows_system_mods());
     assert!(!SecurityMode::Autonomous.allows_system_mods());
-    assert!(SecurityMode::Yolo.allows_system_mods());
+    assert!(SecurityMode::Unrestricted.allows_system_mods());
 }
 
 // === PolicyEngine tests ===
@@ -179,7 +179,7 @@ fn test_autonomous_mode_blocks_blacklisted_commands() {
 }
 
 #[test]
-fn test_yolo_mode_allows_everything() {
+fn test_unrestricted_mode_allows_everything() {
     let paths = test_paths();
     let actions = vec![
         Action::ReadFile { path: "/etc/passwd".to_string(), start_line: None, end_line: None },
@@ -189,7 +189,7 @@ fn test_yolo_mode_allows_everything() {
         Action::HttpRequest { url: "http://evil.com".to_string(), method: None, headers: None, body: None },
     ];
     for action in &actions {
-        assert_eq!(policy().evaluate(action, SecurityMode::Yolo, &paths), PolicyResult::Allow);
+        assert_eq!(policy().evaluate(action, SecurityMode::Unrestricted, &paths), PolicyResult::Allow);
     }
 }
 
@@ -197,7 +197,7 @@ fn test_yolo_mode_allows_everything() {
 fn test_finish_always_allowed() {
     let paths = test_paths();
     let action = Action::Finish { output: Some("done".to_string()) };
-    for mode in &[SecurityMode::Safe, SecurityMode::Interactive, SecurityMode::PowerUser, SecurityMode::Autonomous, SecurityMode::Yolo] {
+    for mode in &[SecurityMode::Safe, SecurityMode::Interactive, SecurityMode::PowerUser, SecurityMode::Autonomous, SecurityMode::Unrestricted] {
         assert_eq!(policy().evaluate(&action, *mode, &paths), PolicyResult::Allow);
     }
 }

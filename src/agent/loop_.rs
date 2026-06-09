@@ -45,6 +45,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
     let mut step_failures: HashMap<u32, u32> = HashMap::new();
     let mut plan_checked = false;
     let mut plan_recovery_count: u32 = 0;
+    let mut empty_response_count: u32 = 0;
 
     // Behavioral mode state
     let behavior = crate::core::behavior::BehaviorMode::from_str(&ctx.config.default_behavior).unwrap_or_default();
@@ -58,7 +59,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
     let model_path = ctx.model_registry.model_path(backend);
     let llm_config = ctx.config.llm.builtin.clone();
-    let native_tools = false; // parser handles both formats; schema injection makes prompt too large
+    let native_tools = backend.native_tools;
     let llm = crate::llm::builtin::create_backend(&llm_config, &model_path, native_tools).await
         .context("Failed to create LLM backend")?;
 
@@ -327,38 +328,45 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         // Strip <think> tags before any further processing
-        // (the raw response is already stripped for display above;
-        //  we strip again so parsing also sees clean text)
         response_text = strip_think_tags(&response_text);
 
-        // Parse action from response (either from tool_calls or text)
+        // If think tags consumed everything (model only outputted a think block with no action)
+        if response_text.trim().is_empty() {
+            empty_response_count += 1;
+            if empty_response_count >= 3 {
+                return Err(anyhow::anyhow!(
+                    "Model repeatedly failed to output a tool action after 3 attempts."
+                ));
+            }
+            conversation.push(Message::system(
+                "You only provided reasoning without a tool action. Output a JSON action inside ```json``` tags to proceed."
+            ));
+            continue;
+        }
+        empty_response_count = 0;
+
+        // Parse single action from response
         let action = if let Some(tcalls) = tool_calls_result {
-            if !tcalls.is_empty() {
-                tool_call_to_action(&tcalls[0], &response_text)
-            } else {
-                tool_parser.parse(&response_text, supports_native_tools).unwrap_or_else(|_| {
-                    Action::Finish { output: Some(response_text.clone()) }
+            tcalls.first().map(|tc| tool_call_to_action(tc, &response_text))
+                .unwrap_or_else(|| {
+                    tool_parser.parse(&response_text, supports_native_tools).unwrap_or_else(|_| {
+                        Action::Finish { output: Some(response_text.clone()) }
+                    })
                 })
-            }
         } else {
-            match tool_parser.parse(&response_text, supports_native_tools) {
-                Ok(a) => a,
-                Err(_e) => {
-                    tracing::warn!("No structured action found; treating as Finish output: {}",
-                        response_text.chars().take(100).collect::<String>());
-                    Action::Finish { output: Some(response_text.clone()) }
-                }
-            }
+            tool_parser.parse(&response_text, supports_native_tools).unwrap_or_else(|_| {
+                tracing::warn!("No structured action found; treating as Finish output: {}",
+                    response_text.chars().take(100).collect::<String>());
+                Action::Finish { output: Some(response_text.clone()) }
+            })
         };
 
         if !session.tui_mode {
-            // No separate reasoning display — already streamed clean above
-            // Just print a newline after the streamed output and show the action
             eprintln!("");
         }
 
         // Check for conversational response (no tool intent)
-        if is_conversational(&response_text) {
+        if is_conversational(&response_text) && matches!(&action, Action::Finish { .. }) {
             if iteration == 0 {
                 session.status = crate::agent::session::SessionStatus::Completed;
                 session.final_output = Some(response_text.clone());
@@ -385,20 +393,18 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             fix_hypothesis = Some(hyp);
         }
 
-        // Check for multiple actions in one response
-        let json_block_count = response_text.matches("```json").count();
-        if json_block_count > 1 || has_multiple_json_objects(&response_text) {
-            let warn = "WARNING: Multiple actions detected in one response. Only the first was used. Output exactly ONE action at a time.";
-            conversation.push(Message::system(warn));
-        }
-
-        // Loop detection
+        // Execute single action
+        let mut iteration_finished = false;
+        let mut last_action_type = String::new();
+        let mut last_was_plan_write = false;
         let action_type = action_type_name(&action);
         action_history.push(action_type.to_string());
         if action_history.len() > 50 {
             action_history.remove(0);
         }
         session.variables.insert("action_history".to_string(), serde_json::to_string(&action_history).unwrap_or_default());
+
+        // Loop detection
         let repeat_count = action_history.iter()
             .rev()
             .take_while(|&a| a == action_type)
@@ -409,14 +415,13 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                  clear your mind and try a completely different approach. Think step by step about what \
                  would actually make progress, and do something you haven't tried yet."
             ));
-            continue; // Restart iteration without incrementing counter
-        }
-        if repeat_count >= 3 && !matches!(&action, Action::Finish { .. }) {
-            let loop_warning = format!(
-                "WARNING: You performed '{}' {} times in a row. This is a loop. STOP this pattern and do something different. Try something different or call finish if the task is done.",
-                action_type, repeat_count,
-            );
-            conversation.push(Message::tool(loop_warning, format!("loop_{}", iteration)));
+            session.variables.insert("last_action".to_string(), action_type.to_string());
+            session.variables.insert("last_result".to_string(), format!("Loop detected: {} repeated 5+ times", action_type));
+        } else if repeat_count >= 3 && !matches!(&action, Action::Finish { .. }) {
+            conversation.push(Message::tool(
+                format!("WARNING: You performed '{}' {} times in a row. This is a loop. STOP this pattern and do something different.", action_type, repeat_count),
+                format!("loop_{}", iteration)
+            ));
         }
 
         // Handle Finish
@@ -425,331 +430,325 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             session.final_output = output.clone();
             let mut mem = ctx.memory.lock().await;
             mem.add_task(&session.base_task, action_history.clone(), &session.final_output.clone().unwrap_or_default());
-            break;
+            iteration_finished = true;
         }
 
-        // Behavioral mode: read-only phase enforcement
-        let read_only_until = behavior.read_only_iters() as u64;
-        if iteration < read_only_until && !matches!(&action, Action::Finish { .. }) {
-            let is_write = matches!(&action,
-                Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }
-                | Action::CreateDirectory { .. } | Action::RestoreBackup { .. }
-            );
-            if is_write {
-                let ro_msg = format!(
-                    "READ-ONLY PHASE: You are in {} mode. No modifications allowed for first {} iterations. \
-                     You are on iteration {}. Only read, list, search, or execute commands. \
-                     Inspect the codebase first.",
-                    behavior.as_str(), read_only_until, iteration + 1,
+        // Skip execution if iteration finished or loop detected
+        if !iteration_finished && repeat_count < 5 {
+            // Behavioral mode: read-only phase enforcement
+            let read_only_until = behavior.read_only_iters() as u64;
+            let read_only_blocked = if iteration < read_only_until {
+                let is_write = matches!(&action,
+                    Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }
+                    | Action::CreateDirectory { .. } | Action::RestoreBackup { .. }
                 );
-                conversation.push(Message::system(ro_msg));
-                session.variables.insert("last_action".to_string(), action_type.to_string());
-                session.variables.insert("last_result".to_string(), "Blocked by read-only phase".to_string());
-                continue;
-            }
-        }
+                if is_write {
+                    conversation.push(Message::system(format!(
+                        "READ-ONLY PHASE: You are in {} mode. No modifications allowed for first {} iterations. \
+                         You are on iteration {}. Only read, list, search, or execute commands. \
+                         Inspect the codebase first.",
+                        behavior.as_str(), read_only_until, iteration + 1,
+                    )));
+                    session.variables.insert("last_action".to_string(), action_type.to_string());
+                    session.variables.insert("last_result".to_string(), "Blocked by read-only phase".to_string());
+                    true
+                } else { false }
+            } else { false };
 
-        // --- Refactor mode: enforce test run before first write ---
-        if behavior == crate::core::behavior::BehaviorMode::Refactor && !tests_passed_before_write {
-            if matches!(&action, Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }) {
-                let test_msg = "REFACTOR MODE: You must run the existing tests BEFORE making any changes. \
-                                Execute the test command first, verify tests pass, then proceed with changes.";
-                conversation.push(Message::system(test_msg));
-                session.variables.insert("last_action".to_string(), action_type.to_string());
-                session.variables.insert("last_result".to_string(), "Blocked: run tests first".to_string());
-                continue;
-            }
-            if matches!(&action, Action::ExecuteCommand { .. }) {
-                // Assume any command might be a test — clear the gate after one execution
-                tests_passed_before_write = true;
-            }
-        }
-
-        // --- TDD phase enforcement ---
-        if behavior == crate::core::behavior::BehaviorMode::Tdd {
-            match tdd_phase {
-                TddPhase::Red => {
-                    // Red phase: only allow writing test files, reading, running tests
-                    let is_test_write = matches!(&action, Action::WriteFile { path, .. } if path.contains("test") || path.ends_with("_test.rs") || path.ends_with(".spec.ts"));
-                    let _is_read_or_command = matches!(&action, Action::ReadFile { .. } | Action::ExecuteCommand { .. } | Action::ListDirectory { .. } | Action::SearchFiles { .. });
-                    if matches!(&action, Action::WriteFile { .. }) && !is_test_write {
-                        let tdd_msg = "TDD RED PHASE: You must write a FAILING TEST first. \
-                                        Only create test files now. Implementation code goes in the GREEN phase.";
-                        conversation.push(Message::system(tdd_msg));
-                        session.variables.insert("last_action".to_string(), action_type.to_string());
-                        session.variables.insert("last_result".to_string(), "Blocked: write test first".to_string());
-                        continue;
-                    }
-                    // Check if test was written and run — heuristic: look for test write then command execute
-                    if is_test_write {
-                        tdd_phase = TddPhase::Green;
-                    }
-                }
-                TddPhase::Green => {
-                    // Green phase: write minimal code to pass tests
-                    if matches!(&action, Action::Finish { .. }) {
-                        let tdd_msg = "TDD GREEN PHASE: The test exists. Write minimal implementation code to make it pass before finishing.";
-                        conversation.push(Message::system(tdd_msg));
-                    }
-                }
-                TddPhase::Refactor => {
-                    // Refactor phase: already tracked separately
-                }
-            }
-        }
-
-        // Security policy evaluation
-        let policy_result = ctx.security.policy.evaluate(&action, ctx.security.current_mode, &ctx.paths);
-        match policy_result {
-            PolicyResult::Allow => {},
-            PolicyResult::Ask => {
-                if ctx.auto_approve {
-                    // --yes flag: auto-approve without prompting
-                } else if !session.tui_mode {
-                    println!("\n[APPROVAL REQUIRED]\n{}", action.description());
-                    println!("Approve? (y/n): ");
-                    let mut input = String::new();
-                    std::io::stdin().read_line(&mut input)?;
-                    if input.trim().to_lowercase() != "y" {
-                        tracing::warn!("Action rejected by user: {}", action.description());
-                        conversation.push(Message::tool(
-                            "Action rejected by user. Propose a different approach.",
-                            format!("rejected_{}", iteration)
-                        ));
-                        session.variables.insert("last_action".to_string(), action_type.to_string());
-                        session.variables.insert("last_result".to_string(), "Rejected by user".to_string());
-                        continue;
-                    }
-                }
-            }
-            PolicyResult::Block => {
-                tracing::warn!("Action blocked by policy: {}", action.description());
-                conversation.push(Message::tool(
-                    format!("Action BLOCKED by security policy: {}. Task cannot proceed with this action.", action.description()),
-                    format!("blocked_{}", iteration)
-                ));
-                session.variables.insert("last_action".to_string(), action_type.to_string());
-                session.variables.insert("last_result".to_string(), "Blocked by policy".to_string());
-                continue;
-            }
-        }
-
-        // --- PlanStep action enforcement (soft guidance) ---
-        if let Some(ref p) = plan {
-            if let Some(step) = p.steps.get(current_step) {
-                if step.action != "execute_command" && action_type != step.action && step.status == StepStatus::Pending {
-                    let guidance = format!(
-                        "NOTE: The current plan step '{}' suggests action '{}', but you used '{}'. \
-                         This is not a block, but try to align with the plan's suggested action if possible.",
-                        step.description, step.action, action_type
-                    );
-                    conversation.push(Message::system(guidance));
-                }
-            }
-        }
-
-        // --- Plan action handling (before executor) ---
-        if matches!(&action, Action::PlanCreate { .. } | Action::PlanStepComplete { .. } | Action::PlanStepFail { .. } | Action::PlanStatus { .. }) {
-            let result_text = handle_plan_action(
-                &action, &mut plan, &mut current_step,
-                &mut step_iterations, &mut step_failures, &mut plan_recovery_count,
-            );
-            conversation.push(Message::tool(result_text.clone(), format!("plan_{}", iteration)));
-            session.variables.insert("last_action".to_string(), action_type.to_string());
-            session.variables.insert("last_result".to_string(), result_text);
-            continue;
-        }
-
-        // Execute the action
-        match ToolExecutor::execute(&action, &ctx, &tool_registry).await {
-            Ok(output) => {
-                if !session.tui_mode {
-                    eprintln!("  ✓ Success");
-                    // Show tool result in the streaming output
-                    let display_out = if output.len() > 2000 {
-                        format!("{}... [truncated {} chars]", &output[..2000], output.len() - 2000)
-                    } else {
-                        output.clone()
-                    };
-                    eprintln!("─── Result ───");
-                    eprintln!("{}", display_out);
-                }
-                tracing::info!("Action succeeded: {}", action.description());
-
-                // Truncate large outputs for conversation
-                let truncated = if output.len() > 2000 {
-                    format!("{}... [truncated {} chars]", &output[..2000], output.len() - 2000)
-                } else {
-                    output.clone()
-                };
-
-                conversation.push(Message::tool(truncated, format!("result_{}", iteration)));
-                session.variables.insert("last_action".to_string(), action_type.to_string());
-                session.variables.insert("last_result".to_string(), output.clone());
-
-                // Clear failure tracking on success
-                failure_tracker.clear(action_type);
-
-                // TDD phase transitions (plan-independent)
-                if behavior == crate::core::behavior::BehaviorMode::Tdd {
-                    if action_type == "write_file" && tdd_phase == TddPhase::Red {
-                        tdd_phase = TddPhase::Green;
-                    } else if action_type == "write_file" && tdd_phase == TddPhase::Green {
-                        tdd_phase = TddPhase::Refactor;
-                    } else if action_type == "execute_command" && tdd_phase == TddPhase::Green {
-                        tdd_phase = TddPhase::Refactor;
-                    }
-                }
-
-                // Refactor mode: test success clears the gate
-                if behavior == crate::core::behavior::BehaviorMode::Refactor && action_type == "execute_command" {
-                    let output_lower = output.to_lowercase();
-                    if !output_lower.contains("fail") && !output_lower.contains("error") {
-                        tests_passed_before_write = true;
-                    }
-                }
-
-                // --- Plan step completion detection ---
-                if let Some(ref mut p) = plan {
-                    if let Some(step) = p.steps.get(current_step) {
-                        // Check if step action matches or is generic
-                        let action_matches = step.action == "execute_command" || action_type == step.action;
-                        if action_matches && step.status != StepStatus::Completed {
-                            Planner::complete_step(p, current_step, format!("{} succeeded", action_type));
-
-                            // Advance to next ready step
-                            let next = Planner::next_ready_step(p);
-                            match next {
-                                Some(idx) => {
-                                    current_step = idx;
-                                    step_iterations.insert(idx as u32, 0);
-                                    step_failures.insert(idx as u32, 0);
-                                    if !session.tui_mode {
-                                        eprintln!("── [Plan step {}/{} complete. Moving to step {}: {}] ──",
-                                            current_step, p.steps.len(), current_step + 1,
-                                            p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done"));
-                                    }
-                                }
-                                None => {
-                                    // All steps done!
-                                    if p.steps.iter().all(|s| s.status == StepStatus::Completed) {
-                                        if !session.tui_mode {
-                                            eprintln!("── [All plan steps complete!] ──");
-                                        }
-                                        current_step = p.steps.len(); // past-the-end sentinel
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                if !session.tui_mode {
-                    eprintln!("  ✗ Failed: {}", e);
-                }
-                tracing::error!("Action failed: {}", e);
-                ctx.audit.log_security("error",
-                    &format!("{}: {}", action.description(), e),
-                    ctx.security.current_mode, true)?;
-
-                conversation.push(Message::tool(
-                    ErrorClassifier::format_with_suggestion(&e, &action),
-                    format!("error_{}", iteration),
-                ));
-
-                session.variables.insert("last_action".to_string(), action_type.to_string());
-                session.variables.insert("last_result".to_string(), format!("Error: {}", e));
-
-                // Track failures for self-correction
-                let action_type_str = action_type_name(&action).to_string();
-                failure_tracker.record(&action_type_str);
-                
-                // Learn from mistakes: store in persistent memory
-                if failure_tracker.should_suggest_correction(&action_type_str, 2) {
-                    let mut mem = ctx.memory.lock().await;
-                    let error_msg = format!("{}: {}", action.description(), e);
-                    let lesson = failure_tracker.correction_prompt(&action_type_str);
-                    mem.add_mistake(
-                        &session.base_task,
-                        &error_msg,
-                        &lesson,
-                        &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
-                        &action_history,
-                    );
-
-                        // Fix mode: include hypothesis in mistake record
-                        if behavior == crate::core::behavior::BehaviorMode::Fix {
-                            if let Some(ref hyp) = fix_hypothesis {
-                                mem.add_mistake(
-                                    &format!("{} (hypothesis was: {})", session.base_task, hyp),
-                                    &error_msg,
-                                    &lesson,
-                                    "Hypothesis was wrong. Re-evaluate the problem and try a different approach.",
-                                    &action_history,
-                                );
-                            }
-                        }
-                }
-
-                // Self-correction prompt after repeated failures
-                if failure_tracker.should_suggest_correction(&action_type_str, 3) {
-                    let correction = failure_tracker.correction_prompt(&action_type_str);
-                    conversation.push(Message::system(correction));
-                }
-
-                // --- Plan step failure handling ---
-                if let Some(ref mut p) = plan {
-                    let current_step_idx = current_step;
-                    let fc = step_failures.entry(current_step_idx as u32).or_insert(0);
-                    *fc += 1;
-                    let fail_count = *fc;
-
-                    if fail_count >= 3 {
-                        // Exceeded retries — check if retryable
-                        if Planner::retryable_steps(p).contains(&current_step_idx) {
-                            Planner::increment_retry(p, current_step_idx);
-                            let retry_msg = format!(
-                                "Plan step '{}' failed. Retry attempt {}/3. Try a different approach.",
-                                p.steps.get(current_step_idx).map(|s| s.description.as_str()).unwrap_or("unknown"),
-                                p.steps.get(current_step_idx).map(|s| s.retry_count).unwrap_or(0)
-                            );
-                            conversation.push(Message::system(retry_msg));
-                        } else {
-                            // Max retries reached — mark failed, move on
-                            Planner::fail_step(p, current_step_idx, format!("Failed after multiple retries: {}", e));
-                            let next = Planner::next_ready_step(p);
-                            match next {
-                                Some(idx) => {
-                                    current_step = idx;
-                                    step_iterations.insert(idx as u32, 0);
-                                    step_failures.insert(idx as u32, 0);
-                                    if !session.tui_mode {
-                                        eprintln!("── [Step failed. Moving to next ready step {}: {}] ──",
-                                            current_step + 1,
-                                            p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done"));
-                                    }
-                                }
-                                None => {}
-                            }
-                        }
-                    }
-                }
-
-                // --- Plan replanning trigger ---
-                if let Some(ref mut p) = plan {
-                    let consecutive_fails: u32 = (0..p.steps.len())
-                        .filter_map(|i| step_failures.get(&(i as u32)))
-                        .sum();
-                    if consecutive_fails >= 6 && plan_recovery_count < 3 {
-                        plan_recovery_count += 1;
+            if !read_only_blocked {
+                let refactor_blocked = if behavior == crate::core::behavior::BehaviorMode::Refactor && !tests_passed_before_write {
+                    if matches!(&action, Action::WriteFile { .. } | Action::DeleteFile { .. } | Action::CopyFile { .. }) {
                         conversation.push(Message::system(
-                            "Replan needed: multiple steps are failing. Update PLAN.md with a new approach for the remaining steps. \
-                             Consider breaking large steps into smaller ones."
+                            "REFACTOR MODE: You must run the existing tests BEFORE making any changes. \
+                             Execute the test command first, verify tests pass, then proceed with changes."
                         ));
+                        session.variables.insert("last_action".to_string(), action_type.to_string());
+                        session.variables.insert("last_result".to_string(), "Blocked: run tests first".to_string());
+                        true
+                    } else {
+                        if matches!(&action, Action::ExecuteCommand { .. }) {
+                            tests_passed_before_write = true;
+                        }
+                        false
+                    }
+                } else { false };
+
+                if !refactor_blocked {
+                    let tdd_blocked = if behavior == crate::core::behavior::BehaviorMode::Tdd {
+                        match tdd_phase {
+                            TddPhase::Red => {
+                                let is_test_write = matches!(&action, Action::WriteFile { path, .. } if path.contains("test") || path.ends_with("_test.rs") || path.ends_with(".spec.ts"));
+                                if matches!(&action, Action::WriteFile { .. }) && !is_test_write {
+                                    conversation.push(Message::system(
+                                        "TDD RED PHASE: You must write a FAILING TEST first. Only create test files now. Implementation code goes in the GREEN phase."
+                                    ));
+                                    session.variables.insert("last_action".to_string(), action_type.to_string());
+                                    session.variables.insert("last_result".to_string(), "Blocked: write test first".to_string());
+                                    true
+                                } else {
+                                    if is_test_write { tdd_phase = TddPhase::Green; }
+                                    false
+                                }
+                            }
+                            TddPhase::Green => {
+                                if matches!(&action, Action::Finish { .. }) {
+                                    conversation.push(Message::system(
+                                        "TDD GREEN PHASE: The test exists. Write minimal implementation code to make it pass before finishing."
+                                    ));
+                                }
+                                false
+                            }
+                            TddPhase::Refactor => false,
+                        }
+                    } else { false };
+
+                    if !tdd_blocked {
+                        // Security policy evaluation
+                        let policy_result = ctx.security.policy.evaluate(&action, ctx.security.current_mode, &ctx.paths);
+                        let mut action_blocked = false;
+                        match policy_result {
+                            PolicyResult::Allow => {},
+                            PolicyResult::Ask => {
+                                if ctx.auto_approve {
+                                    // --yes flag: auto-approve without prompting
+                                } else if !session.tui_mode {
+                                    println!("\n[APPROVAL REQUIRED]\n{}", action.description());
+                                    println!("Approve? (y/n): ");
+                                    let mut input = String::new();
+                                    std::io::stdin().read_line(&mut input)?;
+                                    if input.trim().to_lowercase() != "y" {
+                                        tracing::warn!("Action rejected by user: {}", action.description());
+                                        conversation.push(Message::tool(
+                                            "Action rejected by user. Propose a different approach.",
+                                            format!("rejected_{}", iteration)
+                                        ));
+                                        session.variables.insert("last_action".to_string(), action_type.to_string());
+                                        session.variables.insert("last_result".to_string(), "Rejected by user".to_string());
+                                        action_blocked = true;
+                                    }
+                                }
+                            }
+                            PolicyResult::Block => {
+                                tracing::warn!("Action blocked by policy: {}", action.description());
+                                conversation.push(Message::tool(
+                                    format!("Action BLOCKED by security policy: {}. Task cannot proceed with this action.", action.description()),
+                                    format!("blocked_{}", iteration)
+                                ));
+                                session.variables.insert("last_action".to_string(), action_type.to_string());
+                                session.variables.insert("last_result".to_string(), "Blocked by policy".to_string());
+                                action_blocked = true;
+                            }
+                        }
+
+                        if !action_blocked {
+                            // --- PlanStep action enforcement (soft guidance) ---
+                            if let Some(ref p) = plan {
+                                if let Some(step) = p.steps.get(current_step) {
+                                    if step.action != "execute_command" && action_type != step.action && step.status == StepStatus::Pending {
+                                        conversation.push(Message::system(format!(
+                                            "NOTE: The current plan step '{}' suggests action '{}', but you used '{}'. \
+                                             This is not a block, but try to align with the plan's suggested action if possible.",
+                                            step.description, step.action, action_type
+                                        )));
+                                    }
+                                }
+                            }
+
+                            // --- Plan action handling (before executor) ---
+                            if matches!(&action, Action::PlanCreate { .. } | Action::PlanStepComplete { .. } | Action::PlanStepFail { .. } | Action::PlanStatus { .. }) {
+                                let result_text = handle_plan_action(
+                                    &action, &mut plan, &mut current_step,
+                                    &mut step_iterations, &mut step_failures, &mut plan_recovery_count,
+                                );
+                                conversation.push(Message::tool(result_text.clone(), format!("plan_{}", iteration)));
+                                session.variables.insert("last_action".to_string(), action_type.to_string());
+                                session.variables.insert("last_result".to_string(), result_text);
+                            } else {
+                                // Execute the action
+                                match ToolExecutor::execute(&action, &ctx, &tool_registry).await {
+                                    Ok(output) => {
+                                        if !session.tui_mode {
+                                            eprintln!("  ✓ Success");
+                                            let display_out = if output.len() > 2000 {
+                                                format!("{}... [truncated {} chars]", &output[..2000], output.len() - 2000)
+                                            } else {
+                                                output.clone()
+                                            };
+                                            eprintln!("─── Result ───");
+                                            eprintln!("{}", display_out);
+                                        }
+                                        tracing::info!("Action succeeded: {}", action.description());
+
+                                        let truncated = if output.len() > 2000 {
+                                            format!("{}... [truncated {} chars]", &output[..2000], output.len() - 2000)
+                                        } else {
+                                            output.clone()
+                                        };
+
+                                        conversation.push(Message::tool(truncated, format!("result_{}", iteration)));
+                                        session.variables.insert("last_action".to_string(), action_type.to_string());
+                                        session.variables.insert("last_result".to_string(), output.clone());
+
+                                        failure_tracker.clear(action_type);
+
+                                        if behavior == crate::core::behavior::BehaviorMode::Tdd {
+                                            if action_type == "write_file" && tdd_phase == TddPhase::Red {
+                                                tdd_phase = TddPhase::Green;
+                                            } else if action_type == "write_file" && tdd_phase == TddPhase::Green {
+                                                tdd_phase = TddPhase::Refactor;
+                                            } else if action_type == "execute_command" && tdd_phase == TddPhase::Green {
+                                                tdd_phase = TddPhase::Refactor;
+                                            }
+                                        }
+
+                                        if behavior == crate::core::behavior::BehaviorMode::Refactor && action_type == "execute_command" {
+                                            let output_lower = output.to_lowercase();
+                                            if !output_lower.contains("fail") && !output_lower.contains("error") {
+                                                tests_passed_before_write = true;
+                                            }
+                                        }
+
+                                        // --- Plan step completion detection ---
+                                        if let Some(ref mut p) = plan {
+                                            if let Some(step) = p.steps.get(current_step) {
+                                                let action_matches = step.action == "execute_command" || action_type == step.action;
+                                                if action_matches && step.status != StepStatus::Completed {
+                                                    Planner::complete_step(p, current_step, format!("{} succeeded", action_type));
+                                                    let next = Planner::next_ready_step(p);
+                                                    match next {
+                                                        Some(idx) => {
+                                                            current_step = idx;
+                                                            step_iterations.insert(idx as u32, 0);
+                                                            step_failures.insert(idx as u32, 0);
+                                                            if !session.tui_mode {
+                                                                eprintln!("── [Plan step {}/{} complete. Moving to step {}: {}] ──",
+                                                                    current_step, p.steps.len(), current_step + 1,
+                                                                    p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done"));
+                                                            }
+                                                        }
+                                                        None => {
+                                                            if p.steps.iter().all(|s| s.status == StepStatus::Completed) {
+                                                                if !session.tui_mode {
+                                                                    eprintln!("── [All plan steps complete!] ──");
+                                                                }
+                                                                current_step = p.steps.len();
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        if !session.tui_mode {
+                                            eprintln!("  ✗ Failed: {}", e);
+                                        }
+                                        tracing::error!("Action failed: {}", e);
+                                        ctx.audit.log_security("error",
+                                            &format!("{}: {}", action.description(), e),
+                                            ctx.security.current_mode, true)?;
+
+                                        conversation.push(Message::tool(
+                                            ErrorClassifier::format_with_suggestion(&e, &action),
+                                            format!("error_{}", iteration),
+                                        ));
+
+                                        session.variables.insert("last_action".to_string(), action_type.to_string());
+                                        session.variables.insert("last_result".to_string(), format!("Error: {}", e));
+
+                                        let action_type_str = action_type_name(&action).to_string();
+                                        failure_tracker.record(&action_type_str);
+
+                                        if failure_tracker.should_suggest_correction(&action_type_str, 2) {
+                                            let mut mem = ctx.memory.lock().await;
+                                            let error_msg = format!("{}: {}", action.description(), e);
+                                            let lesson = failure_tracker.correction_prompt(&action_type_str);
+                                            mem.add_mistake(
+                                                &session.base_task,
+                                                &error_msg,
+                                                &lesson,
+                                                &format!("Avoid repeating '{}'. Verify file paths, command syntax, or try a different approach.", action_type_str),
+                                                &action_history,
+                                            );
+                                            if behavior == crate::core::behavior::BehaviorMode::Fix {
+                                                if let Some(ref hyp) = fix_hypothesis {
+                                                    mem.add_mistake(
+                                                        &format!("{} (hypothesis was: {})", session.base_task, hyp),
+                                                        &error_msg,
+                                                        &lesson,
+                                                        "Hypothesis was wrong. Re-evaluate the problem and try a different approach.",
+                                                        &action_history,
+                                                    );
+                                                }
+                                            }
+                                        }
+
+                                        if failure_tracker.should_suggest_correction(&action_type_str, 3) {
+                                            let correction = failure_tracker.correction_prompt(&action_type_str);
+                                            conversation.push(Message::system(correction));
+                                        }
+
+                                        // --- Plan step failure handling ---
+                                        if let Some(ref mut p) = plan {
+                                            let current_step_idx = current_step;
+                                            let fc = step_failures.entry(current_step_idx as u32).or_insert(0);
+                                            *fc += 1;
+                                            let fail_count = *fc;
+                                            if fail_count >= 3 {
+                                                if Planner::retryable_steps(p).contains(&current_step_idx) {
+                                                    Planner::increment_retry(p, current_step_idx);
+                                                    let retry_msg = format!(
+                                                        "Plan step '{}' failed. Retry attempt {}/3. Try a different approach.",
+                                                        p.steps.get(current_step_idx).map(|s| s.description.as_str()).unwrap_or("unknown"),
+                                                        p.steps.get(current_step_idx).map(|s| s.retry_count).unwrap_or(0)
+                                                    );
+                                                    conversation.push(Message::system(retry_msg));
+                                                } else {
+                                                    Planner::fail_step(p, current_step_idx, format!("Failed after multiple retries: {}", e));
+                                                    let next = Planner::next_ready_step(p);
+                                                    match next {
+                                                        Some(idx) => {
+                                                            current_step = idx;
+                                                            step_iterations.insert(idx as u32, 0);
+                                                            step_failures.insert(idx as u32, 0);
+                                                            if !session.tui_mode {
+                                                                eprintln!("── [Step failed. Moving to next ready step {}: {}] ──",
+                                                                    current_step + 1,
+                                                                    p.steps.get(current_step).map(|s| s.description.as_str()).unwrap_or("done"));
+                                                            }
+                                                        }
+                                                        None => {}
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // --- Plan replanning trigger ---
+                                        if let Some(ref mut p) = plan {
+                                            let consecutive_fails: u32 = (0..p.steps.len())
+                                                .filter_map(|i| step_failures.get(&(i as u32)))
+                                                .sum();
+                                            if consecutive_fails >= 6 && plan_recovery_count < 3 {
+                                                plan_recovery_count += 1;
+                                                conversation.push(Message::system(
+                                                    "Replan needed: multiple steps are failing. Update PLAN.md with a new approach for the remaining steps. \
+                                                     Consider breaking large steps into smaller ones."
+                                                ));
+                                            }
+                                        }
+                                        last_action_type = action_type.to_string();
+                                        last_was_plan_write = matches!(&action, Action::WriteFile { path, .. } if path.ends_with("PLAN.md") || path.ends_with("plan.md"));
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
+        }
+
+        if iteration_finished {
+            break;
         }
 
         // --- Plan tracking ---
@@ -775,7 +774,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
         }
 
         // Re-parse PLAN.md only when written to PLAN.md specifically
-        if matches!(&action, Action::WriteFile { path, .. } if path.ends_with("PLAN.md") || path.ends_with("plan.md")) {
+        if last_was_plan_write {
             if plan_path.exists() {
                 if let Ok(p) = PlanParser::from_file(&plan_path, &session.base_task) {
                     plan = Some(p);
@@ -844,14 +843,24 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 }
 
 fn format_for_display(text: &str) -> String {
+    let re = Regex::new(r"```jsonl?[^\n]*\n?").unwrap();
     text
         .replace("<think>", "─── Reasoning ───\n")
         .replace("</think>", "\n───────────────\n")
-        .replace("```json\n", "─── Tool Call ───\n")
+        .lines()
+        .map(|line| {
+            if re.is_match(line) {
+                "─── Tool ───\n```jsonl".to_string()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn strip_think_tags(text: &str) -> String {
-    let re = Regex::new(r"(?s)<think>.*?</think>").unwrap();
+    let re = Regex::new(r"(?s)<think>.*?(</think>|$)").unwrap();
     re.replace_all(text, "").to_string()
 }
 
@@ -1088,8 +1097,8 @@ The file was created. The task is done.
 ```
 
 RULES:
-- Exactly ONE JSON action per response. Multiple actions will be rejected — only the first is used.
-- Do not repeat the same action 3+ times — that is a loop. Try something different or call finish.
+- Only ONE action per response. Multiple actions in one response will be rejected.
+- Do not repeat the same action 5+ times — that is a loop. Try something different or call finish.
 - Always put reasoning BEFORE the JSON, never after it.
 - Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#,
             write_ex = action_json(native, "write_file", &[("path", "readme.md"), ("content", "My story content.")]),
@@ -1122,13 +1131,6 @@ I can see file.txt in the listing. No important files. I'll delete it now.
 {"action": "delete_file", "path": "file.txt"}
 ```
 
---- To delete all files, list first, then delete matching ones. ---
-The workspace has only test files. I'll delete all of them with a pattern.
-
-```json
-{"action": "delete_file", "path": ".", "pattern": "*"}
-```
-
 IMPORTANT: Use `*` (not `*.*`) to match ALL files. `*.*` only matches files containing a dot.
 
 --- CORRECT EXAMPLE (finish after result) ---
@@ -1139,8 +1141,8 @@ The file was created. The task is done.
 ```
 
 RULES:
-- Exactly ONE JSON action per response. Multiple actions will be rejected — only the first is used.
-- Do not repeat the same action 3+ times — that is a loop. Try something different or call finish.
+- Only ONE action per response. Multiple actions in one response will be rejected.
+- Do not repeat the same action 5+ times — that is a loop. Try something different or call finish.
 - Always put reasoning BEFORE the JSON, never after it.
 - Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#.to_string()
     };
@@ -1198,8 +1200,8 @@ I need to delete files. Let me list the directory first to see what's there.
 
 RULES:
 - Always list the directory BEFORE deleting files — know what you're removing.
-- Exactly ONE JSON action per response. Multiple actions will be rejected.
-- Do not repeat the same action 3+ times — that is a loop.
+- Only ONE action per response. Multiple actions will be rejected.
+- Do not repeat the same action 5+ times — that is a loop.
 - Always put reasoning BEFORE the JSON, never after it.
 - Use "pattern": "*" (not "*.*") to match ALL files. "*.*" misses files without a dot."#;
 
