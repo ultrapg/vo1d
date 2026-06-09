@@ -36,9 +36,9 @@ struct Cli {
     #[arg(long, global = true)]
     workspace: Option<PathBuf>,
 
-    /// Enable YOLO mode (absolute autonomy)
+    /// Enable unrestricted mode (absolute autonomy, no approval prompts)
     #[arg(long, global = true)]
-    yolo: bool,
+    unrestricted: bool,
 
     /// Auto-approve all actions (Interactive/Power User only)
     #[arg(long, global = true, visible_alias = "jes")]
@@ -63,7 +63,7 @@ enum SecurityModeArg {
     Interactive,
     PowerUser,
     Autonomous,
-    Yolo,
+    Unrestricted,
 }
 
 #[derive(Subcommand)]
@@ -181,16 +181,16 @@ async fn main() -> Result<()> {
     // Resolve security mode
     let security_mode = resolve_security_mode(&cli);
 
-    // Handle YOLO handshake
-    if matches!(security_mode, SecurityMode::Yolo) {
-        vo1d::security::yolo_handshake()?;
+    // Handle Unrestricted mode handshake
+    if matches!(security_mode, SecurityMode::Unrestricted) {
+        vo1d::security::unrestricted_handshake()?;
     }
 
     // Initialize application context
     let mut ctx = AppContext::new().await?;
 
     // Override security mode if provided via CLI
-    if cli.yolo || cli.mode.is_some() {
+    if cli.unrestricted || cli.mode.is_some() {
         ctx.security.set_mode(security_mode);
     }
 
@@ -275,15 +275,15 @@ async fn main() -> Result<()> {
 }
 
 fn resolve_security_mode(cli: &Cli) -> SecurityMode {
-    if cli.yolo {
-        return SecurityMode::Yolo;
+    if cli.unrestricted {
+        return SecurityMode::Unrestricted;
     }
     match &cli.mode {
         Some(SecurityModeArg::Safe) => SecurityMode::Safe,
         Some(SecurityModeArg::Interactive) => SecurityMode::Interactive,
         Some(SecurityModeArg::PowerUser) => SecurityMode::PowerUser,
         Some(SecurityModeArg::Autonomous) => SecurityMode::Autonomous,
-        Some(SecurityModeArg::Yolo) => SecurityMode::Yolo,
+        Some(SecurityModeArg::Unrestricted) => SecurityMode::Unrestricted,
         None => SecurityMode::Interactive,
     }
 }

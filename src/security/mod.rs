@@ -47,10 +47,10 @@ impl SecurityManager {
     }
 }
 
-/// Perform the YOLO mode handshake.
-pub fn yolo_handshake() -> Result<()> {
+/// Perform the Unrestricted mode handshake.
+pub fn unrestricted_handshake() -> Result<()> {
     println!("{}", "=".repeat(70));
-    println!("{}", "WARNING: VO1D IS INITIALIZING IN \"YOLO\" MODE.");
+    println!("{}", "WARNING: VO1D IS INITIALIZING IN UNRESTRICTED MODE.");
     println!("{}", "IN THIS MODE:");
     println!("{}", "- ALL EXECUTIONS (READS, WRITES, SYSTEM CALLS) RUN WITH ABSOLUTE AUTONOMY.");
     println!("{}", "- ACTIONS CANNOT BE ROLLED BACK OR CANCELLED BY PROMPTS.");
@@ -66,9 +66,9 @@ pub fn yolo_handshake() -> Result<()> {
 
     let trimmed = input.trim();
     if trimmed != "I UNDERSTAND THE RISKS" {
-        anyhow::bail!("YOLO mode confirmation failed. Exact phrase required. Exiting.");
+        anyhow::bail!("Unrestricted mode confirmation failed. Exact phrase required. Exiting.");
     }
 
-    println!("[YOLO MODE] Confirmed. All actions will be executed with absolute autonomy.");
+    println!("[UNRESTRICTED MODE] Confirmed. All actions will be executed with absolute autonomy.");
     Ok(())
 }

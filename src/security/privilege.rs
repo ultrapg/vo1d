@@ -106,7 +106,7 @@ pub fn request_sudo_elevation(args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// Cache sudo credentials (YOLO mode on Linux).
+/// Cache sudo credentials (Unrestricted mode on Linux).
 #[cfg(unix)]
 pub fn cache_sudo_credentials() -> Result<()> {
     let status = std::process::Command::new("sudo")

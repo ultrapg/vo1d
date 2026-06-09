@@ -25,7 +25,7 @@ pub struct AuditEntry {
 #[derive(Clone)]
 pub struct AuditLogger {
     audit_writer: std::sync::Arc<Mutex<Option<std::fs::File>>>,
-    yolo_writer: std::sync::Arc<Mutex<Option<std::fs::File>>>,
+    unrestricted_writer: std::sync::Arc<Mutex<Option<std::fs::File>>>,
     session_id: String,
     elevated: bool,
 }
@@ -33,7 +33,7 @@ pub struct AuditLogger {
 impl AuditLogger {
     pub fn new(paths: &Vo1dPaths) -> Result<Self> {
         let audit_path = paths.audit_log_path();
-        let yolo_path = paths.yolo_audit_log_path();
+        let unrestricted_path = paths.unrestricted_audit_log_path();
 
         let audit_file = std::fs::OpenOptions::new()
             .create(true)
@@ -41,11 +41,11 @@ impl AuditLogger {
             .open(&audit_path)
             .with_context(|| format!("Failed to open audit log: {}", audit_path.display()))?;
 
-        let yolo_file = std::fs::OpenOptions::new()
+        let unrestricted_file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open(&yolo_path)
-            .with_context(|| format!("Failed to open yolo audit log: {}", yolo_path.display()))?;
+            .open(&unrestricted_path)
+            .with_context(|| format!("Failed to open unrestricted audit log: {}", unrestricted_path.display()))?;
 
         let session_id = uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown").to_string();
         let elevated = crate::security::privilege::is_elevated();
@@ -54,7 +54,7 @@ impl AuditLogger {
 
         Ok(Self {
             audit_writer: std::sync::Arc::new(Mutex::new(Some(audit_file))),
-            yolo_writer: std::sync::Arc::new(Mutex::new(Some(yolo_file))),
+            unrestricted_writer: std::sync::Arc::new(Mutex::new(Some(unrestricted_file))),
             session_id,
             elevated,
         })
@@ -90,9 +90,9 @@ impl AuditLogger {
             }
         }
 
-        // Also write to yolo audit log if in YOLO mode
-        if mode == SecurityMode::Yolo {
-            if let Ok(mut guard) = self.yolo_writer.lock() {
+        // Also write to unrestricted audit log if in Unrestricted mode
+        if mode == SecurityMode::Unrestricted {
+            if let Ok(mut guard) = self.unrestricted_writer.lock() {
                 if let Some(file) = guard.as_mut() {
                     let _ = writeln!(file, "{}", json);
                     let _ = file.flush();

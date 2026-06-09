@@ -12,7 +12,7 @@ pub enum SecurityMode {
     /// Auto-approve except privilege escalation and system mods
     Autonomous,
     /// Auto-approve everything including privilege escalation
-    Yolo,
+    Unrestricted,
 }
 
 impl SecurityMode {
@@ -22,7 +22,7 @@ impl SecurityMode {
             "interactive" => Some(Self::Interactive),
             "power-user" | "poweruser" => Some(Self::PowerUser),
             "autonomous" => Some(Self::Autonomous),
-            "yolo" => Some(Self::Yolo),
+            "unrestricted" => Some(Self::Unrestricted),
             _ => None,
         }
     }
@@ -33,13 +33,13 @@ impl SecurityMode {
             Self::Interactive => "Interactive",
             Self::PowerUser => "PowerUser",
             Self::Autonomous => "Autonomous",
-            Self::Yolo => "YOLO",
+            Self::Unrestricted => "Unrestricted",
         }
     }
 
     /// Returns true if this mode can auto-approve actions.
     pub fn auto_approves(&self) -> bool {
-        matches!(self, Self::Autonomous | Self::Yolo)
+        matches!(self, Self::Autonomous | Self::Unrestricted)
     }
 
     /// Returns true if this mode allows command execution.
@@ -49,12 +49,12 @@ impl SecurityMode {
 
     /// Returns true if privilege escalation is auto-approved.
     pub fn auto_elevates(&self) -> bool {
-        matches!(self, Self::Yolo)
+        matches!(self, Self::Unrestricted)
     }
 
     /// Returns true if system modifications are allowed.
     pub fn allows_system_mods(&self) -> bool {
-        matches!(self, Self::Yolo) || matches!(self, Self::PowerUser)
+        matches!(self, Self::Unrestricted) || matches!(self, Self::PowerUser)
     }
 }
 

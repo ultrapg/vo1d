@@ -30,9 +30,9 @@ impl CliOutput {
         eprintln!("[ERROR] {}", msg);
     }
 
-    /// Print YOLO mode banner.
-    pub fn yolo_banner(&self) {
-        println!("\x1b[31m[YOLO MODE]\x1b[0m All actions will be executed with absolute autonomy.");
+    /// Print Unrestricted mode banner.
+    pub fn unrestricted_banner(&self) {
+        println!("\x1b[31m[UNRESTRICTED MODE]\x1b[0m All actions will be executed with absolute autonomy.");
     }
 
     /// Create a progress spinner.

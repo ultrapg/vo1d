@@ -87,9 +87,9 @@ impl Vo1dPaths {
         self.root.join("logs").join(format!("audit_{}.jsonl", date))
     }
 
-    pub fn yolo_audit_log_path(&self) -> PathBuf {
+    pub fn unrestricted_audit_log_path(&self) -> PathBuf {
         let date = chrono::Utc::now().format("%Y-%m-%d");
-        self.root.join("logs").join(format!("yolo_audit_{}.jsonl", date))
+        self.root.join("logs").join(format!("unrestricted_audit_{}.jsonl", date))
     }
 
     pub fn error_log_path(&self) -> PathBuf {

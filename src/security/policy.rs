@@ -42,7 +42,7 @@ impl PolicyEngine {
             SecurityMode::Interactive => self.evaluate_interactive(action, paths),
             SecurityMode::PowerUser => self.evaluate_power_user(action),
             SecurityMode::Autonomous => self.evaluate_autonomous(action),
-            SecurityMode::Yolo => PolicyResult::Allow,
+            SecurityMode::Unrestricted => PolicyResult::Allow,
         }
     }
 
