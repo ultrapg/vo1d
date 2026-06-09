@@ -58,7 +58,7 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
     let model_path = ctx.model_registry.model_path(backend);
     let llm_config = ctx.config.llm.builtin.clone();
-    let native_tools = backend.native_tools;
+    let native_tools = false; // parser handles both formats; schema injection makes prompt too large
     let llm = crate::llm::builtin::create_backend(&llm_config, &model_path, native_tools).await
         .context("Failed to create LLM backend")?;
 
@@ -209,8 +209,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     crate::models::message::Message::user(&summary_prompt),
                 ];
 
+                let timeout_secs = llm_config.inference_timeout_secs.max(60);
                 let summary_result = tokio::time::timeout(
-                    std::time::Duration::from_secs(300),
+                    std::time::Duration::from_secs(timeout_secs),
                     llm.chat(&summary_messages, None),
                 ).await;
                 let summary_result = match summary_result {
@@ -272,11 +273,12 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
         if supports_native_tools {
             let tools: Vec<Tool> = tool_registry.as_llm_tools();
+            let timeout_secs = llm_config.inference_timeout_secs.max(60);
             let result = tokio::time::timeout(
-                std::time::Duration::from_secs(300),
+                std::time::Duration::from_secs(timeout_secs),
                 llm.chat(&conversation, Some(&tools)),
             ).await
-                .map_err(|_| anyhow::anyhow!("LLM chat timed out after 300s"))?
+                .map_err(|_| anyhow::anyhow!("LLM chat timed out after {}s", timeout_secs))?
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
             response_text = result.content;
             tool_calls_result = result.tool_calls;
@@ -286,11 +288,12 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                 std::io::Write::flush(&mut std::io::stdout())?;
             }
         } else {
+            let timeout_secs = llm_config.inference_timeout_secs.max(60);
             let mut stream = tokio::time::timeout(
-                std::time::Duration::from_secs(60),
+                std::time::Duration::from_secs(timeout_secs),
                 llm.stream_chat(&conversation),
             ).await
-                .map_err(|_| anyhow::anyhow!("LLM stream_chat timed out after 60s"))?
+                .map_err(|_| anyhow::anyhow!("LLM stream_chat timed out after {}s", timeout_secs))?
                 .map_err(|e| anyhow::anyhow!("LLM chat failed: {}", e))?;
 
             while let Some(chunk) = tokio::time::timeout(
@@ -948,58 +951,77 @@ async fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> S
     let doc_provider = crate::core::docs::DocProvider::load(&ctx.paths.root_dir().join("docs"));
     let doc_context = doc_provider.to_context_string();
 
+    let native = supports_native_tools;
     let tool_docs = format!(
         r#"AVAILABLE ACTIONS:
 
 --- FILE OPERATIONS ---
 - read_file:      Read a file's contents
-  JSON: {{"action": "read_file", "path": "file.txt"}}
+  JSON: {read_file_json}
 - write_file:     Write content to a file (creates file and parent dirs automatically)
-  JSON: {{"action": "write_file", "path": "file.txt", "content": "..."}}
+  JSON: {write_file_json}
 - delete_file:    Delete a file or files matching a glob pattern
-  JSON: {{"action": "delete_file", "path": "file.txt"}}
-  JSON: {{"action": "delete_file", "path": ".", "pattern": "*.txt"}}
+  JSON: {delete_file_json}
+  JSON: {delete_file_json2}
   NOTE: To match ALL files use "pattern": "*" (not "*.*") which misses files without a dot)
 - copy_file:      Copy source to destination
-  JSON: {{"action": "copy_file", "source": "a.txt", "destination": "b.txt"}}
+  JSON: {copy_file_json}
 - create_directory: Create directory (and any missing parents)
-  JSON: {{"action": "create_directory", "path": "new/folder"}}
+  JSON: {create_dir_json}
 - list_directory: List files in a directory
-  JSON: {{"action": "list_directory", "path": "."}}
+  JSON: {list_dir_json}
 - search_files:   Find files matching a glob pattern
-  JSON: {{"action": "search_files", "pattern": "*.rs"}}
+  JSON: {search_files_json}
 - file_metadata:  Get metadata of a file or directory
-  JSON: {{"action": "file_metadata", "path": "file.txt"}}
+  JSON: {file_meta_json}
 
 --- CHANGE TRACKING ---
 - show_changes:   Show all file changes from git diff or recently modified files
-  JSON: {{"action": "show_changes"}}
-  JSON: {{"action": "show_changes", "path": "src/"}}
+  JSON: {show_changes_json}
+  JSON: {show_changes_json2}
 - restore_backup: Restore a file to its original state from git
-  JSON: {{"action": "restore_backup", "path": "src/main.rs"}}
+  JSON: {restore_json}
 
 --- COMMAND EXECUTION ---
 - execute_command: Run a shell command (timeout in seconds)
-  JSON: {{"action": "execute_command", "command": "dir", "timeout": 60}}
+  JSON: {exec_cmd_json}
   Common {os} commands:
 {cmds}
   Prefer built-in file actions over shell commands when possible.
 
 --- WEB ---
 - web_search:    Search the web using DuckDuckGo (no API key)
-  JSON: {{"action": "web_search", "query": "rust programming", "num_results": 5}}
+  JSON: {web_search_json}
 - web_fetch:     Fetch a URL and convert HTML to markdown
-  JSON: {{"action": "web_fetch", "url": "https://example.com", "max_chars": 5000}}
+  JSON: {web_fetch_json}
 - http_request:  Make an HTTP request
-  JSON: {{"action": "http_request", "url": "https://...", "method": "GET"}}
+  JSON: {http_req_json}
 
 --- INTERACTION ---
 - ask_user:  Ask the user a question
-  JSON: {{"action": "ask_user", "question": "What format?"}}
+  JSON: {ask_user_json}
 
 --- COMPLETION ---
 - finish:  Task is fully done — provide a summary
-  JSON: {{"action": "finish", "output": "What was accomplished"}}"#,
+  JSON: {finish_json}"#,
+        read_file_json = action_json(native, "read_file", &[("path", "file.txt")]),
+        write_file_json = action_json(native, "write_file", &[("path", "file.txt"), ("content", "...")]),
+        delete_file_json = action_json(native, "delete_file", &[("path", "file.txt")]),
+        delete_file_json2 = action_json(native, "delete_file", &[("path", "."), ("pattern", "*.txt")]),
+        copy_file_json = action_json(native, "copy_file", &[("source", "a.txt"), ("destination", "b.txt")]),
+        create_dir_json = action_json(native, "create_directory", &[("path", "new/folder")]),
+        list_dir_json = action_json(native, "list_directory", &[("path", ".")]),
+        search_files_json = action_json(native, "search_files", &[("pattern", "*.rs")]),
+        file_meta_json = action_json(native, "file_metadata", &[("path", "file.txt")]),
+        show_changes_json = action_json(native, "show_changes", &[]),
+        show_changes_json2 = action_json(native, "show_changes", &[("path", "src/")]),
+        restore_json = action_json(native, "restore_backup", &[("path", "src/main.rs")]),
+        exec_cmd_json = action_json(native, "execute_command", &[("command", "dir"), ("timeout", "60")]),
+        web_search_json = action_json(native, "web_search", &[("query", "rust programming"), ("num_results", "5")]),
+        web_fetch_json = action_json(native, "web_fetch", &[("url", "https://example.com"), ("max_chars", "5000")]),
+        http_req_json = action_json(native, "http_request", &[("url", "https://..."), ("method", "GET")]),
+        ask_user_json = action_json(native, "ask_user", &[("question", "What format?")]),
+        finish_json = action_json(native, "finish", &[("output", "What was accomplished")]),
         os = os_hint,
         cmds = os_command_docs(),
     );
@@ -1023,7 +1045,61 @@ Instead of manually editing a PLAN.md file, use the built-in plan tools:
 The agent loop will automatically advance to the next ready step when a step completes.
 Steps can declare dependencies with 'depends_on' (list of step IDs)."#;
 
-    let tool_instructions = r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
+    let tool_instructions = if native {
+        format!(r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
+
+Use the JSON format: {{"name": "action_name", "arguments": {{"param1": "value1", "param2": "value2"}}}}
+
+--- CORRECT EXAMPLE (single action after reasoning) ---
+I need to create readme.md with a story. The file doesn't exist yet so I'll write it.
+
+```json
+{write_ex}
+```
+
+--- CORRECT EXAMPLE (delete file safely) ---
+I should check what files exist before deleting. Let me list the directory first.
+
+```json
+{list_ex}
+```
+
+--- AFTER seeing the listing, then delete ---
+I can see file.txt in the listing. No important files. I'll delete it now.
+
+```json
+{del_ex}
+```
+
+--- To delete all files, list first, then delete matching ones. ---
+The workspace has only test files. I'll delete all of them with a pattern.
+
+```json
+{del_pat_ex}
+```
+
+IMPORTANT: Use `*` (not `*.*`) to match ALL files. `*.*` only matches files containing a dot.
+
+--- CORRECT EXAMPLE (finish after result) ---
+The file was created. The task is done.
+
+```json
+{finish_ex}
+```
+
+RULES:
+- Exactly ONE JSON action per response. Multiple actions will be rejected — only the first is used.
+- Do not repeat the same action 3+ times — that is a loop. Try something different or call finish.
+- Always put reasoning BEFORE the JSON, never after it.
+- Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#,
+            write_ex = action_json(native, "write_file", &[("path", "readme.md"), ("content", "My story content.")]),
+            list_ex = action_json(native, "list_directory", &[("path", ".")]),
+            del_ex = action_json(native, "delete_file", &[("path", "file.txt")]),
+            del_pat_ex = action_json(native, "delete_file", &[("path", "."), ("pattern", "*")]),
+            finish_ex = action_json(native, "finish", &[("output", "Created readme.md with a story.")]),
+        )
+    } else {
+        r#"When using tools: reason first in natural language, then output exactly ONE JSON action inside ```json``` tags.
 
 --- CORRECT EXAMPLE (single action after reasoning) ---
 I need to create readme.md with a story. The file doesn't exist yet so I'll write it.
@@ -1066,7 +1142,8 @@ RULES:
 - Exactly ONE JSON action per response. Multiple actions will be rejected — only the first is used.
 - Do not repeat the same action 3+ times — that is a loop. Try something different or call finish.
 - Always put reasoning BEFORE the JSON, never after it.
-- Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#;
+- Use "pattern": "*" (not "*.*`) to match ALL files. "*.*" misses files without a dot."#.to_string()
+    };
 
     let behavior_note = behavior.system_prompt_note();
     let skill_injection = ctx.skill_registry
@@ -1189,8 +1266,31 @@ fn extract_reasoning(text: &str) -> String {
     }
 }
 
+/// Generate JSON examples in either {"action": ...} or {"name": ..., "arguments": {...}} format.
+fn action_json(native: bool, action: &str, pairs: &[(&str, &str)]) -> String {
+    if native {
+        let mut args = serde_json::Map::new();
+        for (k, v) in pairs {
+            args.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+        }
+        let obj = serde_json::json!({"name": action, "arguments": args});
+        serde_json::to_string(&obj).unwrap_or_default()
+    } else {
+        let mut map = serde_json::Map::new();
+        map.insert("action".to_string(), serde_json::Value::String(action.to_string()));
+        for (k, v) in pairs {
+            map.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+        }
+        serde_json::to_string(&serde_json::Value::Object(map)).unwrap_or_default()
+    }
+}
+
 fn is_conversational(text: &str) -> bool {
     if text.contains(r#"{"action""#) {
+        return false;
+    }
+    // Check for OpenAI-style tool call format
+    if text.contains(r#"{"name""#) && text.contains(r#""arguments""#) {
         return false;
     }
     if text.contains("```json") {
@@ -1200,7 +1300,7 @@ fn is_conversational(text: &str) -> bool {
             .take(10)
             .collect();
         let joined = lines_after.join(" ");
-        if joined.contains(r#"{"action""#) {
+        if joined.contains(r#"{"action""#) || joined.contains(r#"{"name""#) {
             return false;
         }
     }
@@ -1208,8 +1308,9 @@ fn is_conversational(text: &str) -> bool {
 }
 
 fn has_multiple_json_objects(text: &str) -> bool {
-    let count = text.matches(r#"{"action""#).count();
-    count > 1
+    let action_count = text.matches(r#"{"action""#).count();
+    let name_count = text.matches(r#"{"name""#).count();
+    action_count > 1 || name_count > 1
 }
 
 /// Handle plan-related actions dispatched directly in the loop.

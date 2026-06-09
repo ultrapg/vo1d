@@ -2,6 +2,7 @@ pub mod backend;
 pub mod registry;
 pub mod downloader;
 pub mod builtin;
+pub mod benchmark;
 
 #[cfg(feature = "ollama")]
 pub mod ollama;

@@ -1,6 +1,7 @@
 use crate::models::action::Action;
 use anyhow::Result;
 use regex::Regex;
+use serde::Deserialize;
 use tracing::warn;
 
 /// Multi-phase tool parser for extracting structured actions from LLM output.
@@ -36,6 +37,10 @@ impl ToolParser {
         if let Ok(action) = serde_json::from_str::<Action>(text) {
             return Ok(action);
         }
+        // Phase 1b: Try OpenAI-style {"name": "...", "arguments": {...}} format
+        if let Some(action) = try_convert_openai_format(text) {
+            return Ok(action);
+        }
 
         // Phase 2: Extract from markdown code block
         if let Some(caps) = self.json_block_re.captures(text) {
@@ -43,9 +48,15 @@ impl ToolParser {
             if let Ok(action) = serde_json::from_str::<Action>(extracted) {
                 return Ok(action);
             }
+            if let Some(action) = try_convert_openai_format(extracted) {
+                return Ok(action);
+            }
             // Try with smart quote cleaning
             let cleaned = clean_smart_quotes(extracted);
             if let Ok(action) = serde_json::from_str::<Action>(&cleaned) {
+                return Ok(action);
+            }
+            if let Some(action) = try_convert_openai_format(&cleaned) {
                 return Ok(action);
             }
         }
@@ -92,9 +103,15 @@ impl ToolParser {
                             if let Ok(action) = serde_json::from_str::<Action>(candidate) {
                                 return Some(action);
                             }
+                            if let Some(action) = try_convert_openai_format(candidate) {
+                                return Some(action);
+                            }
                             // Try cleaning smart quotes
                             let cleaned = clean_smart_quotes(candidate);
                             if let Ok(action) = serde_json::from_str::<Action>(&cleaned) {
+                                return Some(action);
+                            }
+                            if let Some(action) = try_convert_openai_format(&cleaned) {
                                 return Some(action);
                             }
                         }
@@ -221,6 +238,32 @@ impl ToolParser {
         }
         None
     }
+}
+
+/// Try to convert OpenAI-style {"name": "...", "arguments": {...}} to Action tagged format.
+fn try_convert_openai_format(text: &str) -> Option<Action> {
+    let val: serde_json::Value = serde_json::from_str(text).ok()?;
+    let name = val.get("name")?.as_str()?;
+    let args = val.get("arguments")?;
+
+    let mut action_obj = serde_json::Map::new();
+    action_obj.insert("action".into(), serde_json::Value::String(name.into()));
+
+    if let Some(obj) = args.as_object() {
+        for (k, v) in obj {
+            action_obj.insert(k.clone(), v.clone());
+        }
+    } else if let Some(s) = args.as_str() {
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(s) {
+            if let Some(obj) = parsed.as_object() {
+                for (k, v) in obj {
+                    action_obj.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
+
+    Action::deserialize(serde_json::Value::Object(action_obj)).ok()
 }
 
 /// Clean smart/unicode quotes from text, replacing them with ASCII equivalents.

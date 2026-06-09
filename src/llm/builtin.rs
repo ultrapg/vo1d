@@ -74,12 +74,17 @@ impl BuiltinBackend {
 
             let path = self.model_path.clone();
             let requested_layers = self.config.gpu_layers;
+            let no_gpu = self.config.no_gpu;
 
             let handle = tokio::task::spawn_blocking(move || -> Result<LlamaModelHandle> {
                 let backend =
                     LlamaBackend::init().map_err(|e| anyhow::anyhow!("Backend init: {:?}", e))?;
 
-                let gpu_available = backend.supports_gpu_offload();
+                let gpu_available = backend.supports_gpu_offload() && !no_gpu;
+
+                if no_gpu && backend.supports_gpu_offload() {
+                    tracing::info!("GPU available but disabled by no_gpu setting. Using CPU.");
+                }
 
                 let effective_layers = if gpu_available {
                     if requested_layers > 0 {
@@ -143,10 +148,11 @@ impl BuiltinBackend {
         let ctx_size =
             NonZeroU32::new(config.context_size).unwrap_or(NonZeroU32::new(4096).unwrap());
 
+        let batch_size = if config.batch_size > 0 { config.batch_size } else { 4096 };
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(Some(ctx_size))
             .with_n_threads(config.threads)
-            .with_n_batch(ctx_size.get());
+            .with_n_batch(batch_size.min(ctx_size.get()));
 
         let mut ctx = handle
             .model
@@ -430,17 +436,43 @@ fn build_chat_prompt_with_tools(messages: &[Message], tools: &[Tool], max_contex
 }
 
 fn parse_tool_calls(output: &str) -> Option<Vec<crate::models::message::ToolCall>> {
-    let trimmed = output.trim();
-    if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
-        let name = val.get("name").and_then(|v| v.as_str())?;
-        let args = val.get("arguments").or_else(|| val.get("arguments"))?;
-        Some(vec![crate::models::message::ToolCall::new(
-            name,
-            args.to_string(),
-        )])
-    } else {
-        None
+    let re = regex::Regex::new(r"```(?:json)?\s*([\s\S]*?)```").ok()?;
+    // Try raw text first, then each markdown code block
+    for candidate in std::iter::once(output).chain(
+        re.captures_iter(output).filter_map(|c| c.get(1)).map(|m| m.as_str()),
+    ) {
+        let trimmed = candidate.trim();
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            if let (Some(name), Some(args)) = (
+                val.get("name").and_then(|v| v.as_str()),
+                val.get("arguments"),
+            ) {
+                return Some(vec![crate::models::message::ToolCall::new(
+                    name,
+                    args.to_string(),
+                )]);
+            }
+        }
+        // Handle multiple JSON objects on separate lines (model may output >1 action)
+        let mut calls = Vec::new();
+        for line in trimmed.lines() {
+            let line = line.trim();
+            if line.starts_with('{') && line.ends_with('}') {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                    if let (Some(name), Some(args)) = (
+                        val.get("name").and_then(|v| v.as_str()),
+                        val.get("arguments"),
+                    ) {
+                        calls.push(crate::models::message::ToolCall::new(name, args.to_string()));
+                    }
+                }
+            }
+        }
+        if !calls.is_empty() {
+            return Some(calls);
+        }
     }
+    None
 }
 
 pub async fn create_backend(

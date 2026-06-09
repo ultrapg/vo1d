@@ -46,10 +46,14 @@ pub struct BuiltinConfig {
     pub threads: i32,
     /// GPU layers to offload (0 = CPU only, -1 = all)
     pub gpu_layers: i32,
+    /// Force CPU inference even if GPU is available
+    pub no_gpu: bool,
     /// Batch size for prompt processing
     pub batch_size: u32,
     /// Context size
     pub context_size: u32,
+    /// LLM inference timeout in seconds
+    pub inference_timeout_secs: u64,
     /// Temperature for generation
     pub temperature: f32,
     /// Top-p sampling
@@ -126,8 +130,10 @@ impl Default for BuiltinConfig {
         Self {
             threads: -1,
             gpu_layers: -1,
+            no_gpu: false,
             batch_size: 4096,
             context_size: 8192,
+            inference_timeout_secs: 600,
             temperature: 0.7,
             top_p: 0.9,
             top_k: 40,

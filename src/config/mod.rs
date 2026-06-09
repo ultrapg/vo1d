@@ -1,5 +1,6 @@
 pub mod settings;
 pub mod models;
+pub mod settings_cmd;
 
 use anyhow::{Context, Result};
 use crate::core::paths::Vo1dPaths;

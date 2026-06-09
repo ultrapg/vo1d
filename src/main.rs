@@ -110,6 +110,11 @@ enum Commands {
     },
     /// Edit or view configuration
     Config,
+    /// View and change settings
+    Settings {
+        #[command(subcommand)]
+        action: Option<SettingsAction>,
+    },
     /// View audit logs
     Logs {
         /// Number of recent log lines to show
@@ -125,6 +130,12 @@ enum Commands {
     Memory {
         #[command(subcommand)]
         action: Option<MemoryAction>,
+    },
+    /// Benchmark GPU vs CPU performance for the current model
+    Benchmark {
+        /// Model ID to benchmark (defaults to current default_model)
+        #[arg(long)]
+        model: Option<String>,
     },
 }
 
@@ -146,6 +157,21 @@ enum MemoryAction {
         content: String,
         #[arg(long, default_value = "")]
         tags: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum SettingsAction {
+    /// Show all current settings
+    Show,
+    /// List all available settings with descriptions
+    List,
+    /// Set a setting value
+    Set {
+        /// Setting key (use `vo1d settings list` for all keys)
+        key: String,
+        /// Setting value
+        value: String,
     },
 }
 
@@ -262,6 +288,12 @@ async fn main() -> Result<()> {
         }
         Some(Commands::Memory { action }) => {
             run_memory(ctx, action).await?;
+        }
+        Some(Commands::Settings { action }) => {
+            run_settings(ctx, action).await?;
+        }
+        Some(Commands::Benchmark { model }) => {
+            run_benchmark(ctx, model.as_deref()).await?;
         }
         Some(Commands::Logs { tail }) => {
             run_logs(ctx, tail).await?;
@@ -532,6 +564,54 @@ async fn run_config(ctx: AppContext) -> Result<()> {
     let content = tokio::fs::read_to_string(&config_path).await
         .with_context(|| format!("Failed to read config: {}", config_path.display()))?;
     println!("{}", content);
+    Ok(())
+}
+
+async fn run_settings(ctx: AppContext, action: Option<SettingsAction>) -> Result<()> {
+    match action {
+        Some(SettingsAction::Show) | None => {
+            vo1d::config::settings_cmd::show_settings(&ctx.paths)?;
+        }
+        Some(SettingsAction::List) => {
+            vo1d::config::settings_cmd::list_keys();
+        }
+        Some(SettingsAction::Set { key, value }) => {
+            vo1d::config::settings_cmd::set_setting(&ctx.paths, &ctx.model_registry, &key, &value)?;
+            if key == "default_model" || key == "context_size" || key == "gpu_layers" || key == "no_gpu" {
+                println!("Restart vo1d for changes to take effect.");
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn run_benchmark(ctx: AppContext, model_override: Option<&str>) -> Result<()> {
+    let model_id = model_override.unwrap_or(&ctx.config.default_model);
+    let model_path = ctx
+        .paths
+        .models_dir()
+        .join(format!("{}.gguf", model_id));
+    if !model_path.exists() {
+        anyhow::bail!(
+            "Model '{}' not found at {}. Install it with `vo1d models install {}`.",
+            model_id,
+            model_path.display(),
+            model_id
+        );
+    }
+    let llm_config = ctx.config.llm.builtin.clone();
+    println!("Benchmarking model: {} ({})", model_id, model_path.display());
+    println!();
+    let (gpu, cpu) =
+        vo1d::llm::benchmark::run_gpu_vs_cpu(&model_path, &llm_config).await?;
+    vo1d::llm::benchmark::print_comparison(&gpu, &cpu);
+
+    if cpu.tokens_per_second >= gpu.tokens_per_second {
+        println!(
+            "  Run `vo1d settings set no_gpu true` to disable GPU permanently."
+        );
+    }
+    println!();
     Ok(())
 }
 
