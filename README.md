@@ -9,7 +9,7 @@ vo1d is built on the principle that AI agents should be **private, offline, and 
 ## Features
 
 - **Local LLM inference** — Built-in llama.cpp backend, no cloud dependency
-- **Native tool calling** — Models with structured function calling support (Qwen 2.5/3, Llama 3.1+, Gemma 3/4, Mistral, etc.) receive inline tool definitions and their JSON tool call responses are parsed directly; fallback to text-based ````json```` extraction for all others
+- **Native tool calling** — Parser handles both `{"action": ...}` and OpenAI-style `{"name": ..., "arguments": {...}}"` formats, supporting models trained on function-calling data without native tool schema injection
 - **Autonomous task execution** — ReAct agent loop that plans, acts, and iterates
 - **5 security modes** — Safe, Interactive, PowerUser, Autonomous, Unrestricted
 - **24 built-in tools** — File operations, shell commands, web tools, change tracking, restore, plan management, and skill authoring
@@ -34,6 +34,8 @@ vo1d is built on the principle that AI agents should be **private, offline, and 
 - **Vulkan GPU acceleration** — Optional GPU offload for built-in llama.cpp backend, compatible with AMD, NVIDIA, and Intel GPUs via Vulkan API
 - **Runtime GPU auto-detection** — GPU support is detected at model load time; same binary works with or without a compatible GPU
 - **Graceful GPU fallback** — Falls back to CPU with a warning if no GPU is available at runtime
+- **GPU disable toggle** — `no_gpu = true` in settings forces CPU-only even when a Vulkan device is available
+- **Configurable inference timeout** — Adjustable timeout (default 600s) via `inference_timeout_secs` setting
 
 ---
 
@@ -377,10 +379,12 @@ Vulkan GPU acceleration works with any GPU that has Vulkan driver support:
 
 ```toml
 [llm.builtin]
-gpu_layers = -1   # 0 = CPU only, -1 = all layers (auto-detects GPU at runtime)
+gpu_layers = -1             # 0 = CPU only, -1 = all layers (auto-detects GPU at runtime)
+no_gpu = false              # true = force CPU even if GPU available
+inference_timeout_secs = 600 # Inference timeout in seconds (min 60)
 ```
 
-Set `gpu_layers = 0` explicitly in `config/settings.toml` to force CPU-only mode even when a GPU is available.
+Set `gpu_layers = 0` or `no_gpu = true` in `config/settings.toml` to force CPU-only mode even when a GPU is available.
 
 ---
 
@@ -1011,6 +1015,8 @@ context_size = 8192
 batch_size = 4096
 threads = -1              # -1 = auto-detect CPU core count
 gpu_layers = -1           # 0 = CPU only, -1 = all layers (auto-detects GPU at runtime)
+no_gpu = false            # true = force CPU even if GPU available
+inference_timeout_secs = 600 # Inference timeout in seconds (min 60)
 temperature = 0.7
 top_p = 0.9
 top_k = 40
@@ -1043,6 +1049,8 @@ behavior = "normal"
 | `llm.builtin.top_k` | u32 | `40` | Top-K sampling (0 = disabled) |
 | `llm.builtin.repeat_penalty` | f32 | `1.1` | Repeat penalty (1.0 = disabled, higher = less repetition) |
 | `llm.builtin.max_tokens` | u32 | `2048` | Maximum tokens per generation |
+| `llm.builtin.no_gpu` | bool | `false` | Force CPU-only even if GPU available |
+| `llm.builtin.inference_timeout_secs` | u64 | `600` | Inference timeout in seconds (min 60) |
 | `llm.custom_api.base_url` | string | `""` | Custom API endpoint URL |
 | `llm.custom_api.api_key` | string | `""` | Custom API key |
 | `llm.custom_api.model_name` | string | `""` | Custom API model name |
@@ -1254,15 +1262,17 @@ cat logs/audit_2026-06-09.jsonl | jq '.action_type' | sort | uniq -c
 Usage: vo1d [OPTIONS] [COMMAND]
 
 Commands:
-  task      Execute a one-shot task
-  chat      Start an interactive chat session
-  models    List and manage models
-  sessions  List and manage saved sessions
-  train     Run a training curriculum (e.g. `vo1d train 00_hello_world`)
-  test      Run system tests (`vo1d test compression`, `vo1d test tools`)
-  memory    Manage VO1D's memory and learning
-  config    View current configuration
-  logs      View audit logs
+  task          Execute a one-shot task
+  chat          Start an interactive chat session
+  models        List and manage models
+  sessions      List and manage saved sessions
+  train         Run a training curriculum (e.g. `vo1d train 00_hello_world`)
+  test          Run system tests (`vo1d test compression`, `vo1d test tools`)
+  memory        Manage VO1D's memory and learning
+  config        View current configuration
+  settings      View or change settings (`vo1d settings set key value`)
+  benchmark     Run GPU vs CPU inference benchmark
+  logs          View audit logs
 
 Options:
       --model <MODEL>           Override default model
@@ -1275,6 +1285,24 @@ Options:
       --resume <ID>             Resume a session by ID
   -h, --help                    Print help
   -V, --version                 Print version
+
+Subcommands:
+  test compression              Test context compression
+  test tools                    Test all tool registrations and executor dispatch
+  settings                      View current settings
+  settings list                 View current settings
+  settings set <key> <value>    Change a setting (model-aware validation)
+  benchmark [model]             Run GPU vs CPU inference comparison benchmark
+  train --all --on-failure <POLICY>  Autotrain failure policy (stop, skip, retry)
+  models list                   List available models
+  models install <id>           Download and install a model
+  models remove <id>            Remove an installed model
+  models profile                Show hardware profile and compatible models
+  memory list                   Show memory stats and entries
+  memory show <id>              Show a specific memory by ID
+  memory delete <id>            Delete a specific memory by ID
+  memory clear [type]           Clear memories (all, solutions, mistakes, notes, patterns, history)
+  memory add <content>          Add a custom note (--tags for comma-separated tags)
 
 Subcommands:
   test compression         Test context compression
@@ -1642,7 +1670,7 @@ quantization = "Q4_K_M"
 
 ### Native Tool Support
 
-The `native_tools` field indicates whether the model supports structured function calling natively (e.g., Qwen 2.5, Llama 3.1+, Gemma 3/4, Mistral). When enabled, tool definitions are injected directly into the ChatML system prompt header and the model's JSON tool call responses are parsed automatically, bypassing the text-based ```json```` action extraction.
+The `native_tools` field indicates whether the model supports structured function calling natively (e.g., Qwen 2.5, Llama 3.1+, Gemma 3/4, Mistral). The parser handles both `{"action": ...}` and OpenAI-style `{"name": ..., "arguments": {...}}"` formats, so native tool schema injection is disabled by default to keep prompts small — the parser extracts tool calls from either format directly from model output.
 
 ### Model Compatibility
 
