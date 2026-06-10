@@ -389,31 +389,69 @@ fn print_summary(curriculum: &Curriculum, results: &[EvaluationResult]) {
 }
 
 /// Test context compression by generating enough conversation to trigger it.
-/// This creates a task that deliberately fills the context window, then observes
-/// how the compression system handles it.
+/// Pre-populates workspace with large files so that reading them fills the context
+/// window and exercises the compression system (LLM summarization or prune+compact).
 pub async fn run_test_compression(ctx: AppContext) -> anyhow::Result<()> {
     println!("\n=== CONTEXT COMPRESSION TEST ===");
-    println!("This test creates a task designed to fill the context window and trigger compression.\n");
+    println!("Pre-populating workspace with large files to trigger compression...\n");
 
     let sandbox = ctx.paths.workspace_dir().join("compression_test");
     let _ = std::fs::remove_dir_all(&sandbox);
     std::fs::create_dir_all(&sandbox)?;
+
+    // Pre-create 5 files, each with ~45000 chars of content.
+    // The assistant responses (especially reasoning blocks from a reasoning model)
+    // will also contribute significant content, causing compression to trigger
+    // after just a few iterations.
+    let file_count = 5;
+    for i in 1..=file_count {
+        let story = format!(
+            "COMPRESSION TEST — FILE {} OF {}\n\n\
+             This is a test file designed to fill the context window and trigger compression.\n\
+             The quick brown fox jumps over the lazy dog. This sentence is repeated many times\n\
+             to create a large amount of text without requiring the AI model to generate it.\n\
+             Each file contains large blocks of repetitive text so that\n\
+             when the agent reads these files, the conversation history grows large enough\n\
+             to exceed the compression threshold.\n\n\
+             {}",
+            i, file_count,
+            std::iter::repeat(
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit. \
+                 Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. \
+                 Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris \
+                 nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in \
+                 reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla \
+                 pariatur. Excepteur sint occaecat cupidatat non proident, sunt in \
+                 culpa qui officia deserunt mollit anim id est laborum. "
+            ).take(100).collect::<String>()
+        );
+        std::fs::write(sandbox.join(format!("file_{}.txt", i)), &story)?;
+    }
+
+    let total_chars: u64 = (1..=file_count)
+        .filter_map(|i| std::fs::metadata(sandbox.join(format!("file_{}.txt", i))).ok())
+        .map(|m| m.len())
+        .sum();
+    println!("  Created {} files ({} total chars) in {}", file_count, total_chars, sandbox.display());
 
     let task_desc = format!(
         r#"COMPRESSION TEST TASK
 
 Work inside: {}
 
-Your goal is to demonstrate context compression by:
-1. First, list the workspace (it's empty)
-2. Create 15 files (file_1.txt through file_15.txt) each containing a long story about AI (at least 500 words each)
-3. Read back each file to verify the content
-4. The large amount of content should fill the context window and trigger compression
+Your goal is to demonstrate context compression:
+1. List the workspace to see the files
+2. Read each file (file_1.txt through file_{}.txt) using the read_file action
+3. After reading all files, report a summary of what you found
 
-This is a test — just keep going until you see the compression message or finish.
+The files contain lorem ipsum text — you do NOT need to create or write any files.
+Just read them all, one at a time, using the read_file action.
+
+This is a test — keep going until you see the compression message or finish.
 
 Expected outcome: The agent handles context compression gracefully without crashing."#,
-        sandbox.display()
+        sandbox.display(),
+        file_count,
     );
 
     let mut train_ctx = ctx.clone();

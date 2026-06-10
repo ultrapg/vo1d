@@ -253,8 +253,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
                     }
                 }
             }
-        } else if conv_chars > context_limit {
-            // Old-style compression for moderate overflow
+        // Old-style compression for: overflow, or reasoning models above 60%
+        } else if conv_chars > context_limit || (usage_ratio > 0.60 && conversation.len() > 10 && backend.reasoning) {
             let before = conversation.len();
             let (compressed, summary) = compressor.compress(&conversation, llm_config.context_size as usize);
             conversation = compressed;
@@ -328,6 +328,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             }
         }
 
+        // Save raw response (with <think> blocks) before stripping, for conversation history
+        let raw_response = response_text.clone();
+
         // Strip <think> tags before any further processing
         response_text = strip_think_tags(&response_text);
 
@@ -393,6 +396,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             let hyp = reasoning.chars().take(300).collect::<String>();
             fix_hypothesis = Some(hyp);
         }
+
+        // Push assistant response to conversation so the model can see its own history
+        conversation.push(Message::assistant(&raw_response));
 
         // Execute single action
         let mut iteration_finished = false;
@@ -987,6 +993,12 @@ async fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> S
   JSON: {search_files_json}
 - file_metadata:  Get metadata of a file or directory
   JSON: {file_meta_json}
+- edit_file:      Replace lines start_line..end_line with new content (read the file first!)
+  JSON: {edit_file_json}
+- search_in_files: Search file contents for a pattern (regex or text)
+  JSON: {search_in_files_json}
+- rag_query:      Find relevant sections in large files using keyword search
+  JSON: {rag_query_json}
 
 --- CHANGE TRACKING ---
 - show_changes:   Show all file changes from git diff or recently modified files
@@ -1026,6 +1038,9 @@ async fn build_system_prompt(ctx: &AppContext, supports_native_tools: bool) -> S
         list_dir_json = action_json(native, "list_directory", &[("path", ".")]),
         search_files_json = action_json(native, "search_files", &[("pattern", "*.rs")]),
         file_meta_json = action_json(native, "file_metadata", &[("path", "file.txt")]),
+        edit_file_json = action_json(native, "edit_file", &[("path", "src/main.rs"), ("start_line", "15"), ("end_line", "20"), ("content", "fn new() {\n}")]),
+        search_in_files_json = action_json(native, "search_in_files", &[("pattern", "TODO"), ("file_pattern", "*.rs")]),
+        rag_query_json = action_json(native, "rag_query", &[("path", "big_file.py"), ("query", "database pool"), ("num_chunks", "3")]),
         show_changes_json = action_json(native, "show_changes", &[]),
         show_changes_json2 = action_json(native, "show_changes", &[("path", "src/")]),
         restore_json = action_json(native, "restore_backup", &[("path", "src/main.rs")]),

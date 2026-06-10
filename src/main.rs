@@ -587,10 +587,9 @@ async fn run_settings(ctx: AppContext, action: Option<SettingsAction>) -> Result
 
 async fn run_benchmark(ctx: AppContext, model_override: Option<&str>) -> Result<()> {
     let model_id = model_override.unwrap_or(&ctx.config.default_model);
-    let model_path = ctx
-        .paths
-        .models_dir()
-        .join(format!("{}.gguf", model_id));
+    let entry = ctx.model_registry.get(model_id)
+        .ok_or_else(|| anyhow::anyhow!("Model '{}' not found in registry", model_id))?;
+    let model_path = ctx.model_registry.model_path(entry);
     if !model_path.exists() {
         anyhow::bail!(
             "Model '{}' not found at {}. Install it with `vo1d models install {}`.",
