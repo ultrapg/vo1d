@@ -397,30 +397,33 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             fix_hypothesis = Some(hyp);
         }
 
-        // Push assistant response to conversation so the model can see its own history
-        conversation.push(Message::assistant(&raw_response));
-
         // Execute single action
         let mut iteration_finished = false;
         let mut last_action_type = String::new();
         let mut last_was_plan_write = false;
         let action_type = action_type_name(&action);
-        action_history.push(action_type.to_string());
+        let fingerprint = action_fingerprint(&action);
+        action_history.push(fingerprint.clone());
         if action_history.len() > 50 {
             action_history.remove(0);
         }
         session.variables.insert("action_history".to_string(), serde_json::to_string(&action_history).unwrap_or_default());
 
-        // Loop detection
+        // Loop detection (compares fingerprints — includes parameters like path/command,
+        // so reading different files is not treated as a loop)
         let repeat_count = action_history.iter()
             .rev()
-            .take_while(|&a| a == action_type)
+            .take_while(|&a| *a == fingerprint)
             .count();
         if repeat_count >= 5 && !matches!(&action, Action::Finish { .. }) {
             conversation.push(Message::system(
                 "CRITICAL: You have repeated this action 5+ times. Restarting this iteration — \
                  clear your mind and try a completely different approach. Think step by step about what \
                  would actually make progress, and do something you haven't tried yet."
+            ));
+            conversation.push(Message::tool(
+                format!("Action BLOCKED: '{}' repeated {} times in a row is a loop. Try a different approach.", action_type, repeat_count),
+                format!("loop_block_{}", iteration),
             ));
             session.variables.insert("last_action".to_string(), action_type.to_string());
             session.variables.insert("last_result".to_string(), format!("Loop detected: {} repeated 5+ times", action_type));
@@ -431,8 +434,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             ));
         }
 
-        // Handle Finish
+        // Handle Finish — push assistant message and exit loop
         if let Action::Finish { output } = &action {
+            conversation.push(Message::assistant(&raw_response));
             session.status = crate::agent::session::SessionStatus::Completed;
             session.final_output = output.clone();
             let mut mem = ctx.memory.lock().await;
@@ -442,6 +446,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
         // Skip execution if iteration finished or loop detected
         if !iteration_finished && repeat_count < 5 {
+            // Push assistant response so the model can see its own history
+            conversation.push(Message::assistant(&raw_response));
             // Behavioral mode: read-only phase enforcement
             let read_only_until = behavior.read_only_iters() as u64;
             let read_only_blocked = if iteration < read_only_until {
@@ -922,6 +928,46 @@ fn tool_call_to_action(tc: &crate::models::message::ToolCall, fallback_text: &st
         "web_fetch" => Action::WebFetch { url: tc.function.arguments.clone(), max_chars: None },
         "ask_user" => Action::AskUser { question: tc.function.arguments.clone() },
         _ => Action::Finish { output: Some(fallback_text.to_string()) },
+    }
+}
+
+/// Compact fingerprint of an action including its key parameters,
+/// used for loop detection (unlike action_type_name which is just the type).
+fn action_fingerprint(action: &Action) -> String {
+    match action {
+        Action::ReadFile { path, .. } => format!("read_file|{}", path),
+        Action::WriteFile { path, .. } => format!("write_file|{}", path),
+        Action::ExecuteCommand { command, .. } => format!("execute_command|{}", command),
+        Action::ListDirectory { path, .. } => format!("list_directory|{}", path),
+        Action::SearchFiles { pattern, .. } => format!("search_files|{}", pattern),
+        Action::DeleteFile { path, pattern } => {
+            if let Some(pat) = pattern {
+                format!("delete_file|{}|{}", path, pat)
+            } else {
+                format!("delete_file|{}", path)
+            }
+        }
+        Action::CopyFile { source, destination } => format!("copy_file|{}|{}", source, destination),
+        Action::CreateDirectory { path } => format!("create_directory|{}", path),
+        Action::EditFile { path, start_line, end_line, .. } => format!("edit_file|{}|{}|{}", path, start_line, end_line),
+        Action::SearchInFiles { pattern, .. } => format!("search_in_files|{}", pattern),
+        Action::RagQuery { path, query, .. } => format!("rag_query|{}|{}", path, query),
+        Action::FileMetadata { path } => format!("file_metadata|{}", path),
+        Action::HttpRequest { url, .. } => format!("http_request|{}", url),
+        Action::Finish { .. } => "finish".to_string(),
+        Action::AskUser { question } => format!("ask_user|{}", question),
+        Action::WebSearch { query, .. } => format!("web_search|{}", query),
+        Action::WebFetch { url, .. } => format!("web_fetch|{}", url),
+        Action::ShowChanges { .. } => "show_changes".to_string(),
+        Action::RestoreBackup { path } => format!("restore_backup|{}", path),
+        Action::PlanCreate { goal, .. } => format!("plan_create|{}", goal),
+        Action::PlanStepComplete { step_id, .. } => format!("plan_step_complete|{}", step_id),
+        Action::PlanStepFail { step_id, .. } => format!("plan_step_fail|{}", step_id),
+        Action::PlanStatus {} => "plan_status".to_string(),
+        Action::CreateSkill { name, .. } => format!("create_skill|{}", name),
+        Action::InvokeSkill { name, .. } => format!("invoke_skill|{}", name),
+        Action::ListSkills { .. } => "list_skills".to_string(),
+        Action::DeleteSkill { name } => format!("delete_skill|{}", name),
     }
 }
 
