@@ -13,7 +13,7 @@ vo1d is built on the principle that AI agents should be **private, offline, and 
 - **Single action enforcement** — Only one tool action per iteration; multi-action responses are rejected to prevent runaway execution
 - **Autonomous task execution** — ReAct agent loop that plans, acts, and iterates
 - **5 security modes** — Safe, Interactive, PowerUser, Autonomous, Unrestricted
-- **24 built-in tools** — File operations, shell commands, web tools, change tracking, restore, plan management, and skill authoring
+- **27 built-in tools** — File operations, shell commands, web tools, change tracking, restore, plan management, skill authoring, file content search, line-range editing, and RAG queries for large files
 - **Skill system** — Create, store, invoke, list, and delete reusable multi-step procedures. Skills persist as JSON files and support parameter schemas, making common workflows (setup project, run tests, deploy) repeatable with one command
 - **Plan tools** — `plan_create`, `plan_step_complete`, `plan_step_fail`, `plan_status` for structured multi-step task execution with DAG dependency ordering and auto-advancement
 - **Web tools** — Web search (DuckDuckGo) and web page fetching (HTML→markdown conversion)
@@ -57,7 +57,7 @@ vo1d/
     │   ├── parser.rs       # JSON action parser (extracts ```json blocks, heuristic fallback)
     │   ├── planner.rs      # Plan creation, step completion, DAG dependency management
     │   ├── plan_parser.rs  # Markdown PLAN.md parser (step headers, checkboxes, actions)
-    │   ├── executor.rs     # Tool execution dispatch (all 24 tools + skill resolution)
+    │   ├── executor.rs     # Tool execution dispatch (all 27 tools + skill resolution)
     │   ├── session.rs      # Session state, save/resume
     │   ├── checkpoint.rs   # Iteration checkpointing every 5 turns
     │   └── train.rs        # Training curriculum system
@@ -84,7 +84,7 @@ vo1d/
     │   └── custom.rs       # Custom OpenAI-compatible API (cfg: custom-api)
     ├── tools/              # Tool system
     │   ├── mod.rs          # Module exports
-    │   ├── registry.rs     # ToolRegistry — metadata for all 24 tools
+    │   ├── registry.rs     # ToolRegistry — metadata for all 27 tools
     │   ├── files.rs        # File operations (read, write, list, search, delete, copy, metadata)
     │   ├── shell.rs        # Shell command execution with timeout
     │   ├── web.rs          # HTTP request tool
@@ -280,9 +280,10 @@ vo1d uses a **ReAct** (Reasoning + Acting) agent loop with **LLM-powered context
 3. **Model generates** a response — tokens stream to console in real time. `<think>...</think>` blocks are displayed as `─── Reasoning ───` sections. Tool calls (```` ```jsonl ````) are shown under `─── Tool ───` labels. Tool results appear with `─── Result ───`
 4. **Parser extracts** the JSON action from plain JSON, markdown code blocks, or heuristic patterns
 5. **Security policy** evaluates the action against the current mode
-6. **Action is executed** and the result (or error) is appended to the conversation
-7. **Self-correction** checks for repeated failures per action type (≥3 consecutive → auto-correction prompt injected in next iteration)
-8. **Context compression** occurs before the LLM call when the conversation exceeds limits:
+6. **Assistant response is appended** to the conversation (including `<think>` reasoning blocks) so the model can see its own history in future iterations
+7. **Action is executed** and the result (or error) is appended to the conversation
+8. **Self-correction** checks for repeated failures per action type (≥3 consecutive → auto-correction prompt injected in next iteration)
+9. **Context compression** occurs before the next LLM call when the conversation exceeds limits:
    - **>60% usage** (`usage_ratio > 0.60`): LLM summarization — the model summarizes older messages, preserving information intelligently instead of dropping them
    - **>100% usage** (`conv_chars > context_limit`): Two-phase prune + compact (truncate oversized tool outputs, keep critical + recent messages)
    - Summaries are stored in memory for future reference
@@ -326,12 +327,13 @@ Each iteration follows this sequence:
 11. **Security evaluation** — Allow/Ask/Block based on current security mode
 12. **Plan guidance** — soft alignment warning if action mismatches current plan step
 13. **Plan action handling** — process plan_create/complete/fail/status without executor
-14. **Execute action** — run tool, format result, append to conversation
-15. **Track success/failure** — update memory, plan step completion, failure counters
-16. **Plan auto-advancement** — if step action matches, complete step and advance to next
-17. **Re-parse PLAN.md** — if PLAN.md was written to disk
-18. **Save checkpoint** — every 5 iterations
-19. **Increment iteration** — break if over safety limit
+14. **Push assistant response** — raw model output (including `<think>` blocks) appended to conversation as assistant message, preserving the model's reasoning history
+15. **Execute action** — run tool, format result, append to conversation
+16. **Track success/failure** — update memory, plan step completion, failure counters
+17. **Plan auto-advancement** — if step action matches, complete step and advance to next
+18. **Re-parse PLAN.md** — if PLAN.md was written to disk
+19. **Save checkpoint** — every 5 iterations
+20. **Increment iteration** — break if over safety limit
 
 ---
 
@@ -391,7 +393,7 @@ Set `gpu_layers = 0` or `no_gpu = true` in `config/settings.toml` to force CPU-o
 
 ## Available Tools
 
-The model communicates actions via JSON blocks enclosed in `` ```json ```. The parser extracts the first valid JSON block from the model output. **24 tools** are registered:
+The model communicates actions via JSON blocks enclosed in `` ```json ```. The parser extracts the first valid JSON block from the model output. **27 tools** are registered:
 
 ### Read File
 ```json
@@ -450,6 +452,24 @@ Creates all parent directories as needed (like `mkdir -p`). Succeeds silently if
 { "action": "file_metadata", "path": "some-file.txt" }
 ```
 Returns file size, modification time, file type (file/directory), and permissions. Useful for checking if a file exists before reading it.
+
+### Edit File
+```json
+{ "action": "edit_file", "path": "src/main.rs", "start_line": 15, "end_line": 20, "content": "fn new_function() {\n    println!(\"hello\");\n}" }
+```
+Replaces lines `start_line` through `end_line` (1-indexed, inclusive) with `content`. Safer than `write_file` for targeted edits — the model should read the file first to see its contents, then call `edit_file` with the exact line range to replace. Returns a diff of old vs new content.
+
+### Search In Files
+```json
+{ "action": "search_in_files", "pattern": "TODO", "file_pattern": "*.rs", "path": "src", "max_results": 20 }
+```
+Searches text **contents** of files (not just filenames) for lines matching a pattern. Supports regex and plain text search. `file_pattern` is an optional glob to filter which files to search (e.g. `*.rs`, `*.{js,ts}`). `path` defaults to workspace root. `max_results` defaults to 50. Returns `file:line:content` for each match.
+
+### RAG Query
+```json
+{ "action": "rag_query", "path": "large_file.py", "query": "database connection pool", "num_chunks": 3 }
+```
+Queries a large file by finding the most relevant sections using keyword matching. Splits the file into 100-line chunks, scores each chunk against the query terms, and returns the top matches with line numbers. Use this to find relevant parts of large files (>500 lines) instead of reading the entire file. `num_chunks` defaults to 3 (max 10).
 
 ### Show Changes
 ```json
@@ -1386,7 +1406,7 @@ Models are marked compatible if they fit within available RAM (or VRAM with GPU 
                             │       │      │
                      ┌──────▼──┐ ┌──▼──────▼──────────┐
                      │   LLM   │ │  Tool System        │
-                     │ Backend │ │  (24 tools in       │
+                         │ Backend │ │  (27 tools in       │
                      │ (trait) │ │   registry)         │
                      └─────────┘ │  • file ops         │
                                  │  • shell/cmd        │
@@ -1413,7 +1433,7 @@ Models are marked compatible if they fit within available RAM (or VRAM with GPU 
 - **AppContext**: Shared runtime state — config, paths, hardware profile, security manager, audit logger, model registry, doc provider, memory store, skill registry. Cloned per task.
 - **Agent Loop**: Iterates without a hard cap — context compression keeps conversations manageable. Each iteration: model generates response (streamed in real time — `<think>` blocks as `─── Reasoning ───`, tool calls as `─── Tool ───`, results as `─── Result ───`) → parser extracts JSON action → security evaluates → executor runs → result appended → self-correction checks → plan tracking → skill resolution → behavior enforcement → context compression if needed. Auto-restarts if model repeats same action 5+ times. Only one tool action per iteration is processed.
 - **LLM Backend**: Trait with `chat()` and `stream_chat()`. Implementations: builtin (llama.cpp), ollama, lmstudio, llamacpp-server, custom-api. Pluggable design.
-- **Tool System**: Registry of 24 tools — file operations, shell commands, directory management, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup, plan tools (create, complete, fail, status), skill tools (create, invoke, list, delete).
+- **Tool System**: Registry of 27 tools — file operations, shell commands, directory management, file content search, line-range editing, RAG queries for large files, HTTP requests, web search (DuckDuckGo), web fetch (HTML→markdown), show changes, restore backup, plan tools (create, complete, fail, status), skill tools (create, invoke, list, delete).
 - **Security Manager**: Evaluates each action against the current mode. Approve, ask, or block. All decisions audited. Includes token-aware command blacklist and sandbox escape prevention.
 - **Doc Provider**: Loads 10 markdown docs from `docs/` into system prompt.
 - **Memory System**: 6 stores (task history, preferences, patterns, solutions, mistakes, notes). Similarity matching, plan template matching, action sequence tracking. Capped at 50 MB.
