@@ -434,9 +434,9 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
             ));
         }
 
-        // Handle Finish — push assistant message and exit loop
+        // Handle Finish — push assistant message (without think tags to prevent reasoning loops) and exit loop
         if let Action::Finish { output } = &action {
-            conversation.push(Message::assistant(&raw_response));
+            conversation.push(Message::assistant(&response_text));
             session.status = crate::agent::session::SessionStatus::Completed;
             session.final_output = output.clone();
             let mut mem = ctx.memory.lock().await;
@@ -446,8 +446,8 @@ pub async fn agent_loop(ctx: AppContext, mut session: Session) -> Result<Session
 
         // Skip execution if iteration finished or loop detected
         if !iteration_finished && repeat_count < 5 {
-            // Push assistant response so the model can see its own history
-            conversation.push(Message::assistant(&raw_response));
+            // Push assistant response (without think tags to prevent reasoning model from looping on its own thinking)
+            conversation.push(Message::assistant(&response_text));
             // Behavioral mode: read-only phase enforcement
             let read_only_until = behavior.read_only_iters() as u64;
             let read_only_blocked = if iteration < read_only_until {
@@ -936,7 +936,14 @@ fn tool_call_to_action(tc: &crate::models::message::ToolCall, fallback_text: &st
 fn action_fingerprint(action: &Action) -> String {
     match action {
         Action::ReadFile { path, .. } => format!("read_file|{}", path),
-        Action::WriteFile { path, .. } => format!("write_file|{}", path),
+        Action::WriteFile { path, content, .. } => {
+            let content_preview = if content.len() > 50 {
+                format!("{}...", &content[..50])
+            } else {
+                content.clone()
+            };
+            format!("write_file|{}|{}", path, content_preview)
+        },
         Action::ExecuteCommand { command, .. } => format!("execute_command|{}", command),
         Action::ListDirectory { path, .. } => format!("list_directory|{}", path),
         Action::SearchFiles { pattern, .. } => format!("search_files|{}", pattern),
