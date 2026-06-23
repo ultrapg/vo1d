@@ -2,6 +2,9 @@
 
 **Local-first autonomous AI execution agent.** vo1d runs local LLMs (llama.cpp with optional Vulkan GPU acceleration) to interpret tasks and execute them via tools — file operations, shell commands, HTTP requests, web search, plan management, reusable skills, and more. All inference runs entirely offline on your hardware.
 
+> [!NOTE]
+> I'll pause this project for now. It's just too big of a project for me as one dev.
+
 ## Philosophy
 
 vo1d is built on the principle that AI agents should be **private, offline, and user-controlled**. Unlike cloud-based agents that send your data to third-party servers, vo1d runs entirely on your local hardware. The built-in llama.cpp backend means zero network dependencies for inference — your files, code, and prompts never leave your machine. The security model enforces progressive trust levels from read-only exploration to full system access, putting you in control of what the agent can do.
